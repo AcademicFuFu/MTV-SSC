@@ -437,7 +437,7 @@ class SwinBlockSequence(BaseModule):
 
 
 @BACKBONES.register_module()
-class Swin(BaseModule):
+class SwinV1(BaseModule):
     """ Swin Transformer
     A PyTorch implement of : `Swin Transformer:
     Hierarchical Vision Transformer using Shifted Windows`  -
@@ -541,7 +541,7 @@ class Swin(BaseModule):
         else:
             raise TypeError('pretrained must be a str or None')
 
-        super(Swin, self).__init__(init_cfg=init_cfg)
+        super(SwinV1, self).__init__(init_cfg=init_cfg)
 
         num_layers = len(depths)
         self.out_indices = out_indices
@@ -611,7 +611,7 @@ class Swin(BaseModule):
 
     def train(self, mode=True):
         """Convert the model into training mode while keep layers freezed."""
-        super(Swin, self).train(mode)
+        super(SwinV1, self).train(mode)
         self._freeze_stages()
 
     def _freeze_stages(self):
@@ -715,7 +715,7 @@ class Swin(BaseModule):
             x_tpv.append(x)
             hw_shape_tpv.append(hw_shape)
 
-        outs = [[], [], []]  # tpv
+        outs = [[] for _ in x_3view]  # mpv
         for i, stage in enumerate(self.stages):
             for j in range(len(x_tpv)):
                 x_tpv[j], hw_shape_tpv[j], out, out_hw_shape = stage(x_tpv[j], hw_shape_tpv[j])

@@ -35,7 +35,6 @@ class FastOccHeadV1(nn.Module):
                  point_cloud_range,
                  embed_dims,
                  cross_transformer,
-                 positional_encoding,
                  self_transformer=None,
                  mlp_prior=False,
                  **kwargs):
@@ -48,8 +47,6 @@ class FastOccHeadV1(nn.Module):
         self.data_config = data_config
         self.point_cloud_range = point_cloud_range
         self.volume_embed = nn.Embedding((self.volume_h) * (self.volume_w) * (self.volume_z), self.embed_dims)
-        # self.voxelize = Voxelization(point_cloud_range=point_cloud_range, spatial_shape=np.array([volume_h, volume_w, volume_z]))
-        # self.positional_encoding = build_positional_encoding(positional_encoding)
         self.cross_transformer = build_transformer(cross_transformer)
         self.self_transformer = build_transformer(self_transformer) if self_transformer else None
 
