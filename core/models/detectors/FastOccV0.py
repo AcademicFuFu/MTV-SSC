@@ -9,7 +9,7 @@ from debug.utils import print_detail as pd, mem
 
 
 @DETECTORS.register_module()
-class FastOcc(BaseModule):
+class FastOccV0(BaseModule):
 
     def __init__(self,
                  img_backbone,

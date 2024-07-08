@@ -24,7 +24,7 @@ from debug.utils import print_detail as pd, mem
 
 
 @HEADS.register_module()
-class FastOccHead(nn.Module):
+class FastOccHeadV1(nn.Module):
 
     def __init__(self,
                  *args,

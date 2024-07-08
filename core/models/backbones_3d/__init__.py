@@ -1,4 +1,5 @@
 from .resnet3d import CustomResNet3D
 from .LocalAggregator import LocalAggregator
 from .fuser import Fuser
-from .mtv import MTV
+from .mtvV0 import MTVV0
+from .mtvV1 import MTVV1

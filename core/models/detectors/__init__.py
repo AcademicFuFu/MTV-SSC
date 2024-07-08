@@ -1,2 +1,2 @@
 from .CGFormer import CGFormer
-from .FastOcc import FastOcc
+from .FastOccV0 import FastOccV0

@@ -113,7 +113,7 @@ class TPVPooler(BaseModule):
 
 
 @BACKBONES.register_module()
-class MPVGlobalAggregator(BaseModule):
+class MPVGlobalAggregatorV0(BaseModule):
 
     def __init__(
         self,
