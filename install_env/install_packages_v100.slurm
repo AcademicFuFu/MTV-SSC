@@ -7,10 +7,10 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH -t 4-00:00:00
-#SBATCH -o logs_rtx.log
+#SBATCH -o logs.log
 #SBATCH --chdir /public/home/wangruoyu2023/envs/CGFormer/v100
 
-echo hostname
+echo $(hostname)
 
 srun nvidia-smi
 nvcc -V
