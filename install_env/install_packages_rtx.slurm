@@ -10,6 +10,8 @@
 #SBATCH -o logs_rtx.log
 #SBATCH --chdir /public/home/wangruoyu2023/envs/CGFormer/rtx
 
+echo hostname
+
 srun nvidia-smi
 nvcc -V
 gcc --version
