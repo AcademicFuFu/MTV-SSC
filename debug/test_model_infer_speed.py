@@ -1,6 +1,7 @@
 import os
 import pdb
 import sys
+import time
 import torch
 import pytorch_lightning as pl
 
@@ -46,50 +47,35 @@ def tocuda(batch):
 
 
 def main():
-
     args, config = parse_config()
-    data_dm = DataModule(config)
-    data_dm.setup()
-
     seed = config.seed
     pl.seed_everything(seed)
-    model = pl_model(config)
 
-    # train
-    print('---------------------train----------------------')
+    model = pl_model(config)
+    if torch.cuda.is_available():
+        model = model.cuda()
+    model = model.eval()
+
+    data_dm = DataModule(config)
+    data_dm.setup()
     dl = data_dm.train_dataloader()
     data_iter = iter(dl)
-    desired_index = 0
-    for _ in range(desired_index + 1):
+
+    i_start = 20
+    i_end = 120
+    sum_t = 0
+    for i in range(i_end):
+        print(f"Batch {i}", end='')
         batch = next(data_iter)
-
-    if torch.cuda.is_available():
-        model = model.cuda().eval()
-        bathc = tocuda(batch)
-
-    model_out = model.model.forward_train(batch)
-    mem()
-    print_detail(model_out)
-
-    # # val
-    # print('--------------------- val ----------------------')
-    # dl = data_dm.val_dataloader()
-    # data_iter = iter(dl)
-    # desired_index = 0
-    # for _ in range(desired_index + 1):
-    #     batch = next(data_iter)
-    # print('num_samples: ', len(dl))
-    # print_detail(batch, 'val')
-
-    # # test
-    # print('--------------------- test ---------------------')
-    # dl = data_dm.test_dataloader()
-    # data_iter = iter(dl)
-    # desired_index = 0
-    # for _ in range(desired_index + 1):
-    #     batch = next(data_iter)
-    # print('num_samples: ', len(dl))
-    # print_detail(batch, 'test')
+        if torch.cuda.is_available():
+            bath = tocuda(batch)
+        t_start = time.time()
+        model_out = model.model.forward_test(batch)
+        t_end = time.time()
+        if i > i_start:
+            sum_t += t_end - t_start
+    print()
+    print(f"Average time: {sum_t / (i_end - i_start)}")
 
 
 if __name__ == '__main__':

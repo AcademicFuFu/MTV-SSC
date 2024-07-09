@@ -219,10 +219,10 @@ class PerceptionTransformer_DFA3D(PerceptionTransformer):
         # To do, implement a function which supports bs > 1
         assert bs == 1
         bev_queries = bev_queries.unsqueeze(1).repeat(1, bs, 1)  #  #[N, 1, 64]
-        bev_pos = bev_pos.flatten(2).permute(2, 0, 1) if bev_pos else None  # [N, 1, 64]
+        bev_pos = bev_pos.flatten(2).permute(2, 0, 1) if bev_pos is not None else None  # [N, 1, 64]
 
         unmasked_bev_queries = bev_queries[vox_coords[unmasked_idx, 3], :, :]
-        unmasked_bev_bev_pos = bev_pos[vox_coords[unmasked_idx, 3], :, :] if bev_pos else None
+        unmasked_bev_bev_pos = bev_pos[vox_coords[unmasked_idx, 3], :, :] if bev_pos is not None else None
 
         unmasked_ref_3d = ref_3d[vox_coords[unmasked_idx, 3], :]
         unmasked_ref_3d = unmasked_ref_3d.unsqueeze(0).unsqueeze(0).to(unmasked_bev_queries.device)
