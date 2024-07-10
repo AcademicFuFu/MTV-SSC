@@ -1,17 +1,17 @@
-#!/bin/bash                                                                                                                                                                                                                                                                                                                                                                                                                               
+#!/bin/bash                                                                                                                                                                                                                                                                           
 #SBATCH -J train
 #SBATCH -p zjhu             
-#SBATCH --nodelist=node[29,30,31,32,33]
+#SBATCH --nodelist=node[26,28,22]
 #SBATCH -N 1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:4
 #SBATCH -t 4-00:00:00
-#SBATCH -o logs_rtx.log
+#SBATCH -o logs_v100.log                                                                                                                                                                                             
 
 srun nvidia-smi
 
 # 开conda环境
-source ~/miniconda3/bin/activate cgformer-v100
+source ~/miniconda3/bin/activate cgformer-rtx
 cd $SLURM_SUBMIT_DIR 
 export PYTHONPATH=`pwd`:$PYTHONPATH 
 
