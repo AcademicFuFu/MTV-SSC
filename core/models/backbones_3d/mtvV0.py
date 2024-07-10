@@ -5,7 +5,7 @@ from mmdet3d.models import builder
 import torch.nn as nn
 import torch.nn.functional as F
 import pdb
-from debug.utils import print_detail as pd, mem
+from debug.utils import print_detail as pd, mem, save_feature_map_as_image
 
 
 @BACKBONES.register_module()
@@ -19,7 +19,6 @@ class MTVV0(BaseModule):
     def forward(self, x):
         global_feats = self.global_aggregator(x)
         weights = self.combine_coeff(x)
-        pdb.set_trace()
         out_feats = global_feats[0] * weights[:, 0:1, ...] + global_feats[1] * weights[:, 1:2,
                                                                                        ...] + global_feats[2] * weights[:, 2:3,
                                                                                                                         ...]
