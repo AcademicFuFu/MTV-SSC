@@ -8,7 +8,7 @@ import pdb
 
 from mmcv.ops import MultiScaleDeformableAttention
 
-from debug.utils import print_detail as pd, mem
+from debug.utils import print_detail as pd, mem, save_feature_map_as_image
 
 
 class DeformableTransformer2D(nn.Module):
@@ -132,6 +132,23 @@ class MPVGlobalAggregatorV0(BaseModule):
         self.global_encoder_backbone = builder.build_backbone(global_encoder_backbone)
         self.global_encoder_neck = builder.build_neck(global_encoder_neck)
 
+    def save_tpv(self, tpv_list):
+        # format to b,n,c,h,w
+        feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 4, 3)
+        feat_yz = tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3)
+        feat_zx = tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3)
+
+        save_feature_map_as_image(feat_xy.detach(), 'save/tpv', 'xy', method='pca')
+        save_feature_map_as_image(feat_xy.detach(), 'save/tpv', 'xy', method='average')
+        save_feature_map_as_image(feat_yz.detach(), 'save/tpv', 'yz', method='pca')
+        save_feature_map_as_image(feat_yz.detach(), 'save/tpv', 'yz', method='average')
+        save_feature_map_as_image(feat_zx.detach(), 'save/tpv', 'zx', method='pca')
+        save_feature_map_as_image(feat_zx.detach(), 'save/tpv', 'zx', method='average')
+
+        # remind to comment while training
+        pdb.set_trace()
+        return
+
     def forward(self, x):
         """
         xy: [b, c, h, w, z] -> [b, c, h, w]
@@ -153,4 +170,5 @@ class MPVGlobalAggregatorV0(BaseModule):
         tpv_list[1] = F.interpolate(tpv_list[1], size=(128, 16), mode='bilinear').unsqueeze(2)
         tpv_list[2] = F.interpolate(tpv_list[2], size=(128, 16), mode='bilinear').unsqueeze(3)
 
+        # self.save_tpv(tpv_list)
         return tpv_list

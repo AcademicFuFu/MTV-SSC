@@ -10,7 +10,7 @@ from mmdet3d.models.builder import BACKBONES
 
 from mmcv.ops import MultiScaleDeformableAttention
 
-from debug.utils import print_detail as pd, mem
+from debug.utils import print_detail as pd, mem, save_feature_map_as_image
 
 
 class DeformableTransformer2D(nn.Module):
@@ -102,6 +102,7 @@ class MultiViewNormalDistWeightedPool3D(nn.Module):
                 Z_l = normal_cdf(j, mu, sigma)
                 Z_h = normal_cdf(j + 1, mu, sigma)
                 weights[j] = Z_h - Z_l
+            # pdb.set_trace()
             weights = weights / weights.sum()
             out_i = torch.sum(x * weights.view(1, 1, 1, z, 1), dim=3).permute(0, 3, 1, 2)
             mtv_out.append(out_i)
@@ -206,6 +207,31 @@ class MPVGlobalAggregatorV1(BaseModule):
         self.global_encoder_backbone = builder.build_backbone(global_encoder_backbone)
         self.global_encoder_neck = builder.build_neck(global_encoder_neck)
 
+    def save_mpv(self, mpv_list):
+        xy_list = [view for view in mpv_list if view.shape[-1] == 1]
+        yz_list = [view for view in mpv_list if view.shape[-3] == 1]
+        zx_list = [view for view in mpv_list if view.shape[-2] == 1]
+
+        # format to b,n,c,h,w
+        xy_list = [view.squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4) for view in xy_list]
+        yz_list = [torch.flip(view.squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1]) for view in yz_list]
+        zx_list = [torch.flip(view.squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1]) for view in zx_list]
+
+        feats_xy = torch.cat(xy_list, dim=1)
+        feats_yz = torch.cat(yz_list, dim=1)
+        feats_zx = torch.cat(zx_list, dim=1)
+
+        save_feature_map_as_image(feats_xy.detach(), 'save/mpv/pca', 'xy', method='pca')
+        save_feature_map_as_image(feats_yz.detach(), 'save/mpv/pca', 'yz', method='pca')
+        save_feature_map_as_image(feats_zx.detach(), 'save/mpv/pca', 'zx', method='pca')
+        # save_feature_map_as_image(feats_xy.detach(), 'save/mpv/avg', 'xy', method='average')
+        # save_feature_map_as_image(feats_yz.detach(), 'save/mpv/avg', 'yz', method='average')
+        # save_feature_map_as_image(feats_zx.detach(), 'save/mpv/avg', 'zx', method='average')
+
+        # remind to comment this function while training
+        pdb.set_trace()
+        return
+
     def forward(self, x):
         """
         xy: [b, c, h, w, z] -> [b, c, h, w]
@@ -234,4 +260,5 @@ class MPVGlobalAggregatorV1(BaseModule):
         for i in range(self.num_views[0] + self.num_views[1], self.num_views[0] + self.num_views[1] + self.num_views[2]):
             mpv_list[i] = F.interpolate(mpv_list[i], size=(128, 16), mode='bilinear').unsqueeze(3)
 
+        # self.save_mpv(mpv_list)
         return mpv_list

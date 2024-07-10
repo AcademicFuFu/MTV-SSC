@@ -15,10 +15,7 @@ def parse_config():
     parser = ArgumentParser()
     parser.add_argument('--config_path', default='./configs/semantic_kitti.py')
     parser.add_argument('--ckpt_path', default=None)
-    parser.add_argument('--seed',
-                        type=int,
-                        default=7240,
-                        help='random seed point')
+    parser.add_argument('--seed', type=int, default=7240, help='random seed point')
     parser.add_argument('--log_folder', default='semantic_kitti')
     parser.add_argument('--save_path', default=None)
     parser.add_argument('--test_mapping', action='store_true')
@@ -42,6 +39,10 @@ def main():
     seed = config.seed
     pl.seed_everything(seed)
     model = pl_model(config)
+
+    if args.ckpt_path is not None:
+        print('load ckpt: ', args.ckpt_path)
+        model.load_state_dict(torch.load(args.ckpt_path)['state_dict'])
 
     # train
     print('---------------------train----------------------')

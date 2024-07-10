@@ -5,7 +5,7 @@ from mmdet3d.models import builder
 from mmcv.runner import force_fp32
 import os
 import pdb
-from debug.utils import print_detail as pd, mem
+from debug.utils import print_detail as pd, mem, save_feature_map_as_image, save_denormalized_images
 
 
 @DETECTORS.register_module()
@@ -63,8 +63,14 @@ class FastOccV1(BaseModule):
         self.init_cfg = init_cfg
         self.init_weights()
 
+    def save_img(self, img):
+        save_denormalized_images(img.detach(), 'save/img')
+        pdb.set_trace()
+
     def image_encoder(self, img):
         imgs = img
+        # self.save_img(img)
+
         B, N, C, imH, imW = imgs.shape
         imgs = imgs.view(B * N, C, imH, imW)
 
