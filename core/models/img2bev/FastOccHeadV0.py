@@ -47,8 +47,6 @@ class FastOccHeadV0(nn.Module):
         self.data_config = data_config
         self.point_cloud_range = point_cloud_range
         self.volume_embed = nn.Embedding((self.volume_h) * (self.volume_w) * (self.volume_z), self.embed_dims)
-        # self.voxelize = Voxelization(point_cloud_range=point_cloud_range, spatial_shape=np.array([volume_h, volume_w, volume_z]))
-        # self.positional_encoding = build_positional_encoding(positional_encoding)
         self.cross_transformer = build_transformer(cross_transformer)
         self.self_transformer = build_transformer(self_transformer) if self_transformer else None
 
@@ -149,25 +147,6 @@ class FastOccHeadV0(nn.Module):
                 masked_idx.shape[0], self.embed_dims).to(dtype)
         else:
             vox_feats_flatten[vox_coords[masked_idx, 3], :] = self.mlp_prior(lss_volume_flatten[masked_idx, :])
-
-        # vox_feats_diff = self.self_transformer.diffuse_vox_features(
-        #     mlvl_feats,
-        #     vox_feats_flatten,
-        #     512,
-        #     512,
-        #     ref_3d=ref_3d,
-        #     vox_coords=vox_coords,
-        #     unmasked_idx=unmasked_idx,
-        #     grid_length=None,
-        #     bev_pos=bev_pos_self_attn,
-        #     img_metas=img_metas,
-        #     prev_bev=None,
-        #     cam_params=cam_params,
-        #     **kwargs)
-
-        # vox_feats_diff = vox_feats_diff.reshape(self.volume_h, self.volume_w,
-        #                                         self.volume_z, self.embed_dims)
-        # vox_feats_diff = vox_feats_diff.permute(3, 0, 1, 2).unsqueeze(0)
 
         vox_feats_diff = vox_feats_flatten.reshape(self.volume_h, self.volume_w, self.volume_z, self.embed_dims)
         vox_feats_diff = vox_feats_diff.permute(3, 0, 1, 2).unsqueeze(0)

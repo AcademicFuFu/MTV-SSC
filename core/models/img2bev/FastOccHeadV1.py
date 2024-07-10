@@ -148,25 +148,6 @@ class FastOccHeadV1(nn.Module):
         else:
             vox_feats_flatten[vox_coords[masked_idx, 3], :] = self.mlp_prior(lss_volume_flatten[masked_idx, :])
 
-        # vox_feats_diff = self.self_transformer.diffuse_vox_features(
-        #     mlvl_feats,
-        #     vox_feats_flatten,
-        #     512,
-        #     512,
-        #     ref_3d=ref_3d,
-        #     vox_coords=vox_coords,
-        #     unmasked_idx=unmasked_idx,
-        #     grid_length=None,
-        #     bev_pos=bev_pos_self_attn,
-        #     img_metas=img_metas,
-        #     prev_bev=None,
-        #     cam_params=cam_params,
-        #     **kwargs)
-
-        # vox_feats_diff = vox_feats_diff.reshape(self.volume_h, self.volume_w,
-        #                                         self.volume_z, self.embed_dims)
-        # vox_feats_diff = vox_feats_diff.permute(3, 0, 1, 2).unsqueeze(0)
-
         vox_feats_diff = vox_feats_flatten.reshape(self.volume_h, self.volume_w, self.volume_z, self.embed_dims)
         vox_feats_diff = vox_feats_diff.permute(3, 0, 1, 2).unsqueeze(0)
 
