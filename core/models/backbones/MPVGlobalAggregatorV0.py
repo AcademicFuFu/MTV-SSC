@@ -134,16 +134,16 @@ class MPVGlobalAggregatorV0(BaseModule):
 
     def save_tpv(self, tpv_list):
         # format to b,n,c,h,w
-        feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 4, 3)
-        feat_yz = tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3)
-        feat_zx = tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3)
+        feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
+        feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+        feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
 
-        save_feature_map_as_image(feat_xy.detach(), 'save/tpv', 'xy', method='pca')
-        save_feature_map_as_image(feat_xy.detach(), 'save/tpv', 'xy', method='average')
-        save_feature_map_as_image(feat_yz.detach(), 'save/tpv', 'yz', method='pca')
-        save_feature_map_as_image(feat_yz.detach(), 'save/tpv', 'yz', method='average')
-        save_feature_map_as_image(feat_zx.detach(), 'save/tpv', 'zx', method='pca')
-        save_feature_map_as_image(feat_zx.detach(), 'save/tpv', 'zx', method='average')
+        save_feature_map_as_image(feat_xy.detach(), 'save/tpv/pca', 'xy', method='pca')
+        save_feature_map_as_image(feat_yz.detach(), 'save/tpv/pca', 'yz', method='pca')
+        save_feature_map_as_image(feat_zx.detach(), 'save/tpv/pca', 'zx', method='pca')
+        # save_feature_map_as_image(feat_xy.detach(), 'save/tpv/avg', 'xy', method='average')
+        # save_feature_map_as_image(feat_yz.detach(), 'save/tpv/avg', 'yz', method='average')
+        # save_feature_map_as_image(feat_zx.detach(), 'save/tpv/avg', 'zx', method='average')
 
         # remind to comment while training
         pdb.set_trace()
