@@ -11,7 +11,7 @@
 srun nvidia-smi
 
 # 开conda环境
-source ~/miniconda3/bin/activate cgformer-v100
+source ~/miniconda3/bin/activate cgformer-rtx
 cd $SLURM_SUBMIT_DIR 
 export PYTHONPATH=`pwd`:$PYTHONPATH 
 
