@@ -4,7 +4,7 @@
 #SBATCH --nodelist=node[84]
 #SBATCH -N 1
 #SBATCH --cpus-per-task=8
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:4
 #SBATCH -t 4-00:00:00
 #SBATCH -o logs_titan.log
 
@@ -30,8 +30,7 @@ echo "Log_folder_eval: $log_folder_eval"
 
 if [ "$mode" = "val" ]; then
     echo "Running validation..."
-    # CUDA_VISIBLE_DEVICES=0,1,2,3 \
-    CUDA_VISIBLE_DEVICES=0,1 \
+    CUDA_VISIBLE_DEVICES=0,1,2,3 \
     python main.py \
     --eval \
     --ckpt_path $ckpt_path \
