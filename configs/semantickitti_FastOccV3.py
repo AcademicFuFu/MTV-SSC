@@ -166,7 +166,7 @@ _pos_dim_ = _dim_ // 2
 _num_layers_self_ = 2
 _num_points_self_ = 8
 
-_num_views_ = [2, 1, 1]
+_num_views_ = [3, 1, 1]
 
 model = dict(
     type='FastOccV0',
