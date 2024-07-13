@@ -29,6 +29,19 @@ def parse_config():
     cfg.update(vars(args))
     return args, cfg
 
+def tocuda(batch):
+
+    for k in batch.keys():
+        if type(batch[k]) == torch.Tensor:
+            batch[k] = batch[k].to('cuda')
+        elif type(batch[k]) == dict:
+            for kk in batch[k].keys():
+                if type(batch[k][kk]) == torch.Tensor:
+                    batch[k][kk] = batch[k][kk].to('cuda')
+        elif type(batch[k]) == list:
+            for i in range(len(batch[k])):
+                if type(batch[k][i]) == torch.Tensor:
+                    batch[k][i] = batch[k][i].to('cuda')
 
 def main():
 
@@ -54,18 +67,8 @@ def main():
 
     if torch.cuda.is_available():
         model = model.cuda().eval()
-        for k in batch.keys():
-            if type(batch[k]) == torch.Tensor:
-                batch[k] = batch[k].to('cuda')
-            elif type(batch[k]) == dict:
-                for kk in batch[k].keys():
-                    if type(batch[k][kk]) == torch.Tensor:
-                        batch[k][kk] = batch[k][kk].to('cuda')
-            elif type(batch[k]) == list:
-                for i in range(len(batch[k])):
-                    if type(batch[k][i]) == torch.Tensor:
-                        batch[k][i] = batch[k][i].to('cuda')
-
+        tocuda(batch)
+        print_detail(batch)
     model_out = model.model.forward_train(batch)
     mem()
     print_detail(model_out)
