@@ -10,7 +10,7 @@ from debug.utils import print_detail as pd, mem
 
 
 @BACKBONES.register_module()
-class MTVV1(BaseModule):
+class MTVV0(BaseModule):
 
     def __init__(self, embed_dims=128, global_aggregator=None, num_views=[1, 1, 1]):
         super().__init__()

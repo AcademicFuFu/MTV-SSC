@@ -24,7 +24,7 @@ from debug.utils import print_detail as pd, mem
 
 
 @HEADS.register_module()
-class FastOccHeadV0(nn.Module):
+class VoxFormerHead_Lite(nn.Module):
 
     def __init__(self,
                  *args,
@@ -110,15 +110,8 @@ class FastOccHeadV0(nn.Module):
 
         if proposal.sum() < 2:
             proposal = torch.ones_like(proposal)
-        # Generate bev postional embeddings for cross and self attention
-        # bev_pos_cross_attn = self.positional_encoding(torch.zeros(
-        #     (bs, 512, 512), device=volume_queries.device).to(dtype)).to(dtype)  # [1, dim, 128*4, 128*4]
-        # bev_pos_self_attn = self.positional_encoding(torch.zeros(
-        #     (bs, 512, 512), device=volume_queries.device).to(dtype)).to(dtype)  # [1, dim, 128*4, 128*4]
 
         vox_coords, ref_3d = self.vox_coords.clone(), self.ref_3d.clone()
-        # proposal = torch.zeros([bs, self.volume_h, self.volume_w, self.volume_z])
-        # proposal[unq[:, 0], unq[:, 1], unq[:, 2], unq[:, 3]] = 1
         unmasked_idx = torch.nonzero(proposal.reshape(-1) > 0).view(-1)
         masked_idx = torch.nonzero(proposal.reshape(-1) == 0).view(-1)
 

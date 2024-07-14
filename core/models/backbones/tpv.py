@@ -9,7 +9,7 @@ from debug.utils import print_detail as pd, mem, save_feature_map_as_image
 
 
 @BACKBONES.register_module()
-class MTVV0(BaseModule):
+class TPVV0(BaseModule):
 
     def __init__(self, embed_dims=128, global_aggregator=None):
         super().__init__()
