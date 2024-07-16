@@ -16,7 +16,7 @@ def parse_config():
     parser.add_argument('--config_path', default='./configs/semantic_kitti.py')
     parser.add_argument('--ckpt_path', default=None)
     parser.add_argument('--seed', type=int, default=7240, help='random seed point')
-    parser.add_argument('--log_folder', default='semantic_kitti')
+    parser.add_argument('--train_or_test', default='train')
     parser.add_argument('--save_path', default=None)
     parser.add_argument('--test_mapping', action='store_true')
     parser.add_argument('--submit', action='store_true')
@@ -28,6 +28,7 @@ def parse_config():
 
     cfg.update(vars(args))
     return args, cfg
+
 
 def tocuda(batch):
 
@@ -43,6 +44,7 @@ def tocuda(batch):
                 if type(batch[k][i]) == torch.Tensor:
                     batch[k][i] = batch[k][i].to('cuda')
 
+
 def main():
 
     args, config = parse_config()
@@ -57,41 +59,55 @@ def main():
         print('load ckpt: ', args.ckpt_path)
         model.load_state_dict(torch.load(args.ckpt_path)['state_dict'])
 
-    # train
-    print('---------------------train----------------------')
-    dl = data_dm.train_dataloader()
-    data_iter = iter(dl)
-    desired_index = 0
-    for _ in range(desired_index + 1):
-        batch = next(data_iter)
+    if args.train_or_test == 'train':
+        print('---------------------train----------------------')
+        dl = data_dm.train_dataloader()
+        data_iter = iter(dl)
+        desired_index = 0
+        for _ in range(desired_index + 1):
+            batch = next(data_iter)
 
-    if torch.cuda.is_available():
-        model = model.cuda().eval()
-        tocuda(batch)
-        print_detail(batch)
-    model_out = model.model.forward_train(batch)
-    mem()
-    print_detail(model_out)
+        if torch.cuda.is_available():
+            model = model.cuda().eval()
+            tocuda(batch)
+            print_detail(batch)
+        model_out = model.model.forward_train(batch)
+        mem()
+        print_detail(model_out)
 
-    # # val
-    # print('--------------------- val ----------------------')
-    # dl = data_dm.val_dataloader()
-    # data_iter = iter(dl)
-    # desired_index = 0
-    # for _ in range(desired_index + 1):
-    #     batch = next(data_iter)
-    # print('num_samples: ', len(dl))
-    # print_detail(batch, 'val')
+    elif args.train_or_test == 'val':
+        print('--------------------- val ----------------------')
+        dl = data_dm.val_dataloader()
+        data_iter = iter(dl)
+        desired_index = 0
+        for _ in range(desired_index + 1):
+            batch = next(data_iter)
 
-    # # test
-    # print('--------------------- test ---------------------')
-    # dl = data_dm.test_dataloader()
-    # data_iter = iter(dl)
-    # desired_index = 0
-    # for _ in range(desired_index + 1):
-    #     batch = next(data_iter)
-    # print('num_samples: ', len(dl))
-    # print_detail(batch, 'test')
+        if torch.cuda.is_available():
+            model = model.cuda().eval()
+            tocuda(batch)
+            print_detail(batch)
+
+        model_out = model.model.forward_test(batch)
+        mem()
+        print_detail(model_out)
+
+    elif args.train_or_test == 'test':
+        print('--------------------- test ---------------------')
+        dl = data_dm.test_dataloader()
+        data_iter = iter(dl)
+        desired_index = 0
+        for _ in range(desired_index + 1):
+            batch = next(data_iter)
+
+        if torch.cuda.is_available():
+            model = model.cuda().eval()
+            tocuda(batch)
+            print_detail(batch)
+
+        model_out = model.model.forward_test(batch)
+        mem()
+        print_detail(model_out)
 
 
 if __name__ == '__main__':

@@ -4,24 +4,27 @@ from mmdet.models import DETECTORS
 from mmdet3d.models import builder
 from mmcv.runner import force_fp32
 import os
+
+import pdb
+from debug.utils import print_detail as pd, mem, save_feature_map_as_image
+
+
 @DETECTORS.register_module()
 class CGFormer(BaseModule):
-    def __init__(
-        self,
-        img_backbone,
-        img_neck,
-        
-        img_view_transformer,
-        depth_net=None,
-        proposal_layer=None,
-        VoxFormer_head=None,
-        occ_encoder_backbone=None,
-        occ_encoder_neck=None,
-        pts_bbox_head=None,
-        init_cfg=None,
-        train_cfg=None,
-        test_cfg=None
-    ):
+
+    def __init__(self,
+                 img_backbone,
+                 img_neck,
+                 img_view_transformer,
+                 depth_net=None,
+                 proposal_layer=None,
+                 VoxFormer_head=None,
+                 occ_encoder_backbone=None,
+                 occ_encoder_neck=None,
+                 pts_bbox_head=None,
+                 init_cfg=None,
+                 train_cfg=None,
+                 test_cfg=None):
         super().__init__()
 
         self.img_backbone = builder.build_backbone(img_backbone)
@@ -40,33 +43,33 @@ class CGFormer(BaseModule):
             self.proposal_layer = builder.build_head(proposal_layer)
         else:
             self.proposal_layer = None
-        
+
         if VoxFormer_head is not None:
             self.VoxFormer_head = builder.build_head(VoxFormer_head)
         else:
             self.VoxFormer_head = None
-        
+
         if occ_encoder_backbone is not None:
             self.occ_encoder_backbone = builder.build_backbone(occ_encoder_backbone)
         else:
             self.occ_encoder_backbone = None
-        
+
         if occ_encoder_neck is not None:
             self.occ_encoder_neck = builder.build_neck(occ_encoder_neck)
         else:
             self.occ_encoder_neck = None
-        
+
         self.pts_bbox_head = builder.build_head(pts_bbox_head)
-        
+
         self.init_cfg = init_cfg
         self.init_weights()
-    
+
     def image_encoder(self, img):
         imgs = img
-        B, N, C, imH, imW = imgs.shape   
+        B, N, C, imH, imW = imgs.shape
         imgs = imgs.view(B * N, C, imH, imW)
-        
-        x = self.img_backbone(imgs) 
+
+        x = self.img_backbone(imgs)
 
         if self.img_neck is not None:
             x = self.img_neck(x)
@@ -74,9 +77,9 @@ class CGFormer(BaseModule):
                 x = x[0]
         _, output_dim, ouput_H, output_W = x.shape
         x = x.view(B, N, output_dim, ouput_H, output_W)
-        
+
         return x
-    
+
     def extract_img_feat(self, img_inputs, img_metas):
         img = img_inputs[0]
         img_enc_feats = self.image_encoder(img)
@@ -87,15 +90,17 @@ class CGFormer(BaseModule):
         geo_inputs = [rots, trans, intrins, post_rots, post_trans, bda, mlp_input]
 
         context, depth = self.depth_net([img_enc_feats] + geo_inputs, img_metas)
-        view_trans_inputs = [rots[:, 0:1, ...], trans[:, 0:1, ...], intrins[:, 0:1, ...], post_rots[:, 0:1, ...], post_trans[:, 0:1, ...], bda]
+        view_trans_inputs = [
+            rots[:, 0:1, ...], trans[:, 0:1, ...], intrins[:, 0:1, ...], post_rots[:, 0:1, ...], post_trans[:, 0:1, ...], bda
+        ]
 
         if self.img_view_transformer is not None:
             lss_volume = self.img_view_transformer(context, depth, view_trans_inputs)
         else:
             lss_volume = None
-        
+
         query_proposal = self.proposal_layer(view_trans_inputs, img_metas)
-        
+
         if query_proposal.shape[1] == 2:
             proposal = torch.argmax(query_proposal, dim=1)
         else:
@@ -104,23 +109,21 @@ class CGFormer(BaseModule):
             mlvl_dpt_dists = [depth.unsqueeze(1)]
         else:
             mlvl_dpt_dists = None
-        x = self.VoxFormer_head(
-            [context],
-            proposal,
-            cam_params=view_trans_inputs,
-            lss_volume=lss_volume,
-            img_metas=img_metas,
-            mlvl_dpt_dists=mlvl_dpt_dists
-        )
+        x = self.VoxFormer_head([context],
+                                proposal,
+                                cam_params=view_trans_inputs,
+                                lss_volume=lss_volume,
+                                img_metas=img_metas,
+                                mlvl_dpt_dists=mlvl_dpt_dists)
         return x, query_proposal, depth
-    
+
     def occ_encoder(self, x):
         if self.occ_encoder_backbone is not None:
             x = self.occ_encoder_backbone(x)
 
         if self.occ_encoder_neck is not None:
             x = self.occ_encoder_neck(x)
-        
+
         return x
 
     def forward_train(self, data_dict):
@@ -135,12 +138,7 @@ class CGFormer(BaseModule):
         if type(voxel_feats_enc) is not list:
             voxel_feats_enc = [voxel_feats_enc]
 
-        output = self.pts_bbox_head(
-            voxel_feats=voxel_feats_enc,
-            img_metas=img_metas,
-            img_feats=None,
-            gt_occ=gt_occ
-        )
+        output = self.pts_bbox_head(voxel_feats=voxel_feats_enc, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
         losses = dict()
 
@@ -159,11 +157,7 @@ class CGFormer(BaseModule):
         pred = output['output_voxels']
         pred = torch.argmax(pred, dim=1)
 
-        train_output = {
-            'losses': losses,
-            'pred': pred,
-            'gt_occ': gt_occ
-        }
+        train_output = {'losses': losses, 'pred': pred, 'gt_occ': gt_occ}
 
         return train_output
 
@@ -182,24 +176,16 @@ class CGFormer(BaseModule):
             voxel_feats_enc = [voxel_feats_enc[0]]
         if type(voxel_feats_enc) is not list:
             voxel_feats_enc = [voxel_feats_enc]
-        
-        output = self.pts_bbox_head(
-            voxel_feats=voxel_feats_enc,
-            img_metas=img_metas,
-            img_feats=None,
-            gt_occ=gt_occ
-        )
+
+        output = self.pts_bbox_head(voxel_feats=voxel_feats_enc, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
         pred = output['output_voxels']
         pred = torch.argmax(pred, dim=1)
 
-        test_output = {
-            'pred': pred,
-            'gt_occ': gt_occ
-        }
+        test_output = {'pred': pred, 'gt_occ': gt_occ}
 
         return test_output
-    
+
     def forward(self, data_dict):
         if self.training:
             return self.forward_train(data_dict)
