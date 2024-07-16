@@ -40,22 +40,29 @@ if [ "$mode" = "val" ]; then
     --log_every_n_steps 100 \
     --save_path pred
 else
-    echo "Running training and validation..."
+    echo "Running training..."
     CUDA_VISIBLE_DEVICES=0,1,2,3 \
     python main.py \
     --config_path $config_path \
     --log_folder $filename \
     --seed 7240 \
     --log_every_n_steps 100
-    CUDA_VISIBLE_DEVICES=0,1,2,3 \
-    python main.py \
-    --eval \
-    --ckpt_path $ckpt_path \
-    --config_path $config_path \
-    --log_folder $log_folder_eval \
-    --seed 7240 \
-    --log_every_n_steps 100 \
-    --save_path pred
+    # echo "Running training and validation..."
+    # CUDA_VISIBLE_DEVICES=0,1,2,3 \
+    # python main.py \
+    # --config_path $config_path \
+    # --log_folder $filename \
+    # --seed 7240 \
+    # --log_every_n_steps 100
+    # CUDA_VISIBLE_DEVICES=0,1,2,3 \
+    # python main.py \
+    # --eval \
+    # --ckpt_path $ckpt_path \
+    # --config_path $config_path \
+    # --log_folder $log_folder_eval \
+    # --seed 7240 \
+    # --log_every_n_steps 100 \
+    # --save_path pred
 fi
 
 ###################################################################
