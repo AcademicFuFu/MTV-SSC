@@ -7,21 +7,12 @@ camera_used = ['left']
 dataset_type = 'SemanticKITTIDatasetLC'
 point_cloud_range = [0, -25.6, -2, 51.2, 25.6, 4.4]
 occ_size = [256, 256, 32]
-lss_downsample = [2, 2, 2]
+grid_size = [480, 360, 32]
 
 voxel_x = (point_cloud_range[3] - point_cloud_range[0]) / occ_size[0]
 voxel_y = (point_cloud_range[4] - point_cloud_range[1]) / occ_size[1]
 voxel_z = (point_cloud_range[5] - point_cloud_range[2]) / occ_size[2]
 voxel_size = [voxel_x, voxel_y, voxel_z]
-
-grid_config = {
-    'xbound': [point_cloud_range[0], point_cloud_range[3], voxel_x * lss_downsample[0]],
-    'ybound': [point_cloud_range[1], point_cloud_range[4], voxel_y * lss_downsample[1]],
-    'zbound': [point_cloud_range[2], point_cloud_range[5], voxel_z * lss_downsample[2]],
-    'dbound': [2.0, 58.0, 0.5],
-}
-
-empty_idx = 0
 
 semantic_kitti_class_frequencies = [
     5.41773033e09,
@@ -86,14 +77,13 @@ data_config = {
     'resize_test': 0.00,
 }
 
-tpv_w_ = 128
-tpv_h_ = 128
+tpv_w_ = 240
+tpv_h_ = 180
 tpv_z_ = 16
 scale_w = 2
 scale_h = 2
 scale_z = 2
 
-grid_size = [256, 256, 32]
 coarse_ratio = 2
 nbr_class = 20
 track_running_stats = False
