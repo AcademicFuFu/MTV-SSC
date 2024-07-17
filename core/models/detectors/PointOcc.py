@@ -48,6 +48,20 @@ class PointTPV_Occ(BaseModule):
             tpv_list.append(x)
         return tpv_list
 
+    def save_tpv(self, tpv_list):
+        # format to b,n,c,h,w
+        feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
+        feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+        feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+
+        save_feature_map_as_image(feat_xy.detach(), 'save/lidar/tpv_neck/pca', 'xy', method='pca')
+        save_feature_map_as_image(feat_yz.detach(), 'save/lidar/tpv_neck/pca', 'yz', method='pca')
+        save_feature_map_as_image(feat_zx.detach(), 'save/lidar/tpv_neck/pca', 'zx', method='pca')
+
+        # remind to comment while training
+        pdb.set_trace()
+        return
+
     def forward(self, data_dict):
         if self.training:
             return self.forward_train(data_dict)
@@ -62,6 +76,7 @@ class PointTPV_Occ(BaseModule):
         voxel_pos_grid_coarse = data_dict['voxel_position_grid_coarse'][0]
 
         x_lidar_tpv = self.extract_lidar_feat(points=points, grid_ind=grid_ind)
+        # self.save_tpv(x_lidar_tpv)
         x_3d = self.tpv_aggregator(x_lidar_tpv, voxel_pos_grid_coarse)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 

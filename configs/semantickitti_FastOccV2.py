@@ -166,8 +166,10 @@ _pos_dim_ = _dim_ // 2
 _num_layers_self_ = 2
 _num_points_self_ = 8
 
+_num_views_ = [2, 2, 3]
+
 model = dict(
-    type='FastOccV0',
+    type='FastOccV1',
     img_backbone=dict(
         type='CustomEfficientNet',
         arch='b7',
@@ -208,7 +210,7 @@ model = dict(
         init_cfg=None,
     ),
     VoxFormer_head=dict(
-        type='FastOccHeadV0',
+        type='VoxFormerHead_Lite',
         volume_h=128,
         volume_w=128,
         volume_z=16,
@@ -259,7 +261,7 @@ model = dict(
         mlp_prior=True,
     ),
     occ_encoder_backbone=dict(
-        type='MTVV0',
+        type='TPVV1',
         embed_dims=128,
         global_aggregator=dict(
             type='TPVGlobalAggregator',

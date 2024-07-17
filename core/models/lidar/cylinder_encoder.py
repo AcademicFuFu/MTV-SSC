@@ -71,12 +71,9 @@ class CylinderEncoder_Occ(BaseModule):
         feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
         feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
 
-        save_feature_map_as_image(feat_xy.detach(), 'save/lidar/tpv/pca', 'xy', method='pca')
-        save_feature_map_as_image(feat_yz.detach(), 'save/lidar/tpv/pca', 'yz', method='pca')
-        save_feature_map_as_image(feat_zx.detach(), 'save/lidar/tpv/pca', 'zx', method='pca')
-        # save_feature_map_as_image(feat_xy.detach(), 'save/tpv/avg', 'xy', method='average')
-        # save_feature_map_as_image(feat_yz.detach(), 'save/tpv/avg', 'yz', method='average')
-        # save_feature_map_as_image(feat_zx.detach(), 'save/tpv/avg', 'zx', method='average')
+        save_feature_map_as_image(feat_xy.detach(), 'save/lidar/tpv_tokenizer/pca', 'xy', method='pca')
+        save_feature_map_as_image(feat_yz.detach(), 'save/lidar/tpv_tokenizer/pca', 'yz', method='pca')
+        save_feature_map_as_image(feat_zx.detach(), 'save/lidar/tpv_tokenizer/pca', 'zx', method='pca')
 
         # remind to comment while training
         pdb.set_trace()
