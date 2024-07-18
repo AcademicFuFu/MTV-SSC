@@ -1,4 +1,5 @@
 from mmdet3d.models.builder import BACKBONES
+import pdb
 import torch
 from mmcv.runner import BaseModule
 from mmdet3d.models import builder
@@ -50,7 +51,7 @@ class TPVPooler(BaseModule):
 
 
 @BACKBONES.register_module()
-class TPVGlobalAggregator(BaseModule):
+class TPVGlobalAggregator_Cam(BaseModule):
 
     def __init__(
         self,

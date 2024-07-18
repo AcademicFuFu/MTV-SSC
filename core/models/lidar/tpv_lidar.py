@@ -27,23 +27,9 @@ def scatter_nd(indices, updates, shape):
 
 
 @BACKBONES.register_module()
-class TPVAggregator_Occ_dev(BaseModule):
+class TPVTransformer_Lidar_V0(BaseModule):
 
-    def __init__(self,
-                 tpv_h,
-                 tpv_w,
-                 tpv_z,
-                 grid_size_occ,
-                 coarse_ratio,
-                 loss_weight=[1, 1, 1, 1],
-                 nbr_classes=20,
-                 in_dims=64,
-                 hidden_dims=128,
-                 out_dims=None,
-                 scale_h=2,
-                 scale_w=2,
-                 scale_z=2,
-                 use_checkpoint=False):
+    def __init__(self, tpv_h, tpv_w, tpv_z, grid_size_occ, coarse_ratio, scale_h=2, scale_w=2, scale_z=2, use_checkpoint=False):
         super().__init__()
         self.tpv_h = tpv_h
         self.tpv_w = tpv_w
@@ -51,18 +37,8 @@ class TPVAggregator_Occ_dev(BaseModule):
         self.scale_h = scale_h
         self.scale_w = scale_w
         self.scale_z = scale_z
-        self.loss_weight = loss_weight
         self.grid_size_occ = np.asarray(grid_size_occ).astype(np.int32)
         self.coarse_ratio = coarse_ratio
-        out_dims = in_dims if out_dims is None else out_dims
-
-        self.decoder = nn.Sequential(nn.Linear(in_dims, hidden_dims), nn.Softplus(), nn.Linear(hidden_dims, out_dims))
-
-        self.classes = nbr_classes
-        self.use_checkpoint = use_checkpoint
-
-        self.ce_loss_func = nn.CrossEntropyLoss(ignore_index=255)
-        self.lovasz_loss_func = lovasz_softmax
 
     def save_tpv(self, tpv_list):
         # format to b,n,c,h,w
@@ -109,7 +85,9 @@ class TPVAggregator_Occ_dev(BaseModule):
         tpv_hw = tpv_xy.permute(0, 1, 3, 2)
         tpv_wz = tpv_zx.permute(0, 1, 3, 2)
         tpv_zh = tpv_yz.permute(0, 1, 3, 2)
-        bs, c, _, _ = tpv_hw.shape
+        B, C, _, _ = tpv_hw.shape
+        W, H, D = int(self.grid_size_occ[0] / self.coarse_ratio), int(self.grid_size_occ[1] / self.coarse_ratio), int(
+            self.grid_size_occ[2] / self.coarse_ratio)
 
         if self.scale_h != 1 or self.scale_w != 1:
             tpv_hw = F.interpolate(tpv_hw, size=(int(self.tpv_h * self.scale_h), int(self.tpv_w * self.scale_w)), mode='bilinear')
@@ -118,32 +96,36 @@ class TPVAggregator_Occ_dev(BaseModule):
         if self.scale_w != 1 or self.scale_z != 1:
             tpv_wz = F.interpolate(tpv_wz, size=(int(self.tpv_w * self.scale_w), int(self.tpv_z * self.scale_z)), mode='bilinear')
 
-        self.save_tpv(self.tpv_polar2cart([tpv_hw, tpv_zh, tpv_wz], voxels_coarse))
-
         # voxel_coarse: bs, (vox_w*vox_h*vox_z)/coarse_ratio**3, 3
         _, n, _ = voxels_coarse.shape
-        voxels_coarse = voxels_coarse.reshape(bs, 1, n, 3)
+        voxels_coarse = voxels_coarse.reshape(B, 1, n, 3)
         voxels_coarse[..., 0] = voxels_coarse[..., 0] / (self.tpv_w * self.scale_w) * 2 - 1
         voxels_coarse[..., 1] = voxels_coarse[..., 1] / (self.tpv_h * self.scale_h) * 2 - 1
         voxels_coarse[..., 2] = voxels_coarse[..., 2] / (self.tpv_z * self.scale_z) * 2 - 1
 
         sample_loc_vox = voxels_coarse[:, :, :, [0, 1]]
-        tpv_hw_vox = F.grid_sample(tpv_hw, sample_loc_vox, padding_mode="border").squeeze(2)  # bs, c, n
+        tpv_hw_vox = F.grid_sample(tpv_hw, sample_loc_vox, padding_mode="border").squeeze(2).view(B, C, H, W, D)[:, :, :, :, 1]
         sample_loc_vox = voxels_coarse[:, :, :, [1, 2]]
-        tpv_zh_vox = F.grid_sample(tpv_zh, sample_loc_vox, padding_mode="border").squeeze(2)
+        tpv_zh_vox = F.grid_sample(tpv_zh, sample_loc_vox, padding_mode="border").squeeze(2).view(B, C, H, W, D)[:, :, 0, :, :]
         sample_loc_vox = voxels_coarse[:, :, :, [2, 0]]
-        tpv_wz_vox = F.grid_sample(tpv_wz, sample_loc_vox, padding_mode="border").squeeze(2)
-        fused = tpv_hw_vox + tpv_zh_vox + tpv_wz_vox
+        tpv_wz_vox = F.grid_sample(tpv_wz, sample_loc_vox, padding_mode="border").squeeze(2).view(B, C, H, W, D)[:, :, :, 0, :]
 
-        fused = fused.permute(0, 2, 1)  # bs, whz, c
-        if self.use_checkpoint:
-            fused = torch.utils.checkpoint.checkpoint(self.decoder, fused)
-        else:
-            fused = self.decoder(fused)
-        W, H, D = int(self.grid_size_occ[0] / self.coarse_ratio), int(self.grid_size_occ[1] / self.coarse_ratio), int(
-            self.grid_size_occ[2] / self.coarse_ratio)
-        fused = fused.permute(0, 2, 1)
-        B, C, N = fused.shape
-        fused = fused.reshape(B, C, W, H, D)
+        tpv_list = [tpv_hw_vox.unsqueeze(4), tpv_zh_vox.unsqueeze(2), tpv_wz_vox.unsqueeze(3)]
+        # self.save_tpv(tpv_list)
+        return tpv_list
 
-        return [fused]
+
+@BACKBONES.register_module()
+class TPVAggregator_Lidar_V0(BaseModule):
+
+    def __init__(self, **kwargs):
+        super().__init__()
+
+    def forward(self, tpv_list):
+        feats_xy, feats_yz, feats_zx = tpv_list
+        x, y, z = feats_xy.shape[2], feats_xy.shape[3], feats_yz.shape[4]
+        feats_xy = feats_xy.repeat(1, 1, 1, 1, z)
+        feats_yz = feats_yz.repeat(1, 1, x, 1, 1)
+        feats_zx = feats_zx.repeat(1, 1, 1, y, 1)
+        out_feats = feats_xy + feats_yz + feats_zx
+        return [out_feats]

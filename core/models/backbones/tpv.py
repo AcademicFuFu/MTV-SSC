@@ -28,15 +28,16 @@ class TPVV0(BaseModule):
 @BACKBONES.register_module()
 class TPVV1(BaseModule):
 
-    def __init__(self, embed_dims=128, global_aggregator=None):
+    def __init__(self, global_aggregator=None, **kwargs):
         super().__init__()
         self.global_aggregator = builder.build_backbone(global_aggregator)
 
     def forward(self, x):
         global_feats = self.global_aggregator(x)
         feats_xy, feats_yz, feats_zx = global_feats
-        feats_xy = feats_xy.repeat(1, 1, 1, 1, 16)
-        feats_yz = feats_yz.repeat(1, 1, 128, 1, 1)
-        feats_zx = feats_zx.repeat(1, 1, 1, 128, 1)
+        x, y, z = feats_xy.shape[2], feats_xy.shape[3], feats_yz.shape[4]
+        feats_xy = feats_xy.repeat(1, 1, 1, 1, z)
+        feats_yz = feats_yz.repeat(1, 1, x, 1, 1)
+        feats_zx = feats_zx.repeat(1, 1, 1, y, 1)
         out_feats = feats_xy + feats_yz + feats_zx
         return out_feats
