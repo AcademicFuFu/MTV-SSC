@@ -4,3 +4,5 @@ from .FastOccV0 import FastOccV0
 from .FastOccV1 import FastOccV1
 
 from .LidarSegmentor import LidarSegmentorPointOcc
+from .CameraSegmentor import CameraSegmentorEfficientSSC
+from .DistillOCC import DistillOccV0

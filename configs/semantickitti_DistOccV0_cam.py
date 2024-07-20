@@ -246,7 +246,7 @@ OccHead = dict(
     class_frequencies=semantic_kitti_class_frequencies,
 )
 model = dict(
-    type='FastOccV1',
+    type='CameraSegmentorEfficientSSC',
     img_backbone=dict(
         type='CustomEfficientNet',
         arch='b7',
@@ -337,16 +337,16 @@ model = dict(
         ),
         mlp_prior=True,
     ),
-    occ_encoder_backbone=dict(
-        type='TPVV1',
-        global_aggregator=dict(
-            type='TPVGlobalAggregator_Cam',
-            embed_dims=_dim_,
-            split=[8, 8, 8],
-            grid_size=[128, 128, 16],
-            global_encoder_backbone=Swin,
-            global_encoder_neck=GeneralizedLSSFPN,
-        ),
+    tpv_transformer=dict(
+        type='TPVTransformer_Cam_V0',
+        embed_dims=_dim_,
+        split=[8, 8, 8],
+        grid_size=[128, 128, 16],
+        global_encoder_backbone=Swin,
+        global_encoder_neck=GeneralizedLSSFPN,
+    ),
+    tpv_aggregator=dict(
+        type='TPVAggregator_Cam_V0',
     ),
     pts_bbox_head=OccHead,
 )

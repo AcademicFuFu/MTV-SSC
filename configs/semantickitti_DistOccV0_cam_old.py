@@ -1,5 +1,3 @@
-lidar_ckpt = 'pretrain/distill_lidar_v0.ckpt'
-
 data_root = '/public/datasets/SemanticKITTI/dataset'
 ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
 stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
@@ -121,7 +119,7 @@ train_pipeline = [
          is_train=True,
          point_cloud_range=point_cloud_range),
     dict(type='CollectData',
-         keys=['img_inputs','points', 'grid_ind', 'voxel_position_grid_coarse', 'gt_occ'],
+         keys=['img_inputs', 'gt_occ'],
          meta_keys=['pc_range', 'occ_size', 'raw_img', 'stereo_depth', 'gt_occ_1_2']),
 ]
 
@@ -166,7 +164,7 @@ test_pipeline = [
          is_train=False,
          point_cloud_range=point_cloud_range),
     dict(type='CollectData',
-         keys=['img_inputs','points', 'grid_ind', 'voxel_position_grid_coarse', 'gt_occ'],
+         keys=['img_inputs', 'gt_occ'],
          meta_keys=['pc_range', 'occ_size', 'sequence', 'frame_id', 'raw_img', 'stereo_depth'])
 ]
 
@@ -188,15 +186,15 @@ test_dataloader_config = dict(batch_size=1, num_workers=4)
 
 # model params #
 _dim_ = 128
-_tpv_dim_ = 192
-_num_cams_ = 1
-_num_levels_ = 1
-_num_layers_cross_ = 3
-_num_points_cross_ = 8
-
 numC_Trans = 128
+_tpv_dim_ = 192
 voxel_out_channels = [_tpv_dim_]
 norm_cfg = dict(type='GN', num_groups=32, requires_grad=True)
+
+_num_layers_cross_ = 3
+_num_points_cross_ = 8
+_num_levels_ = 1
+_num_cams_ = 1
 
 Swin = dict(
     type='Swin',
@@ -247,141 +245,110 @@ OccHead = dict(
     norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
     class_frequencies=semantic_kitti_class_frequencies,
 )
-
 model = dict(
-    type='DistillOccV0',
-    teacher_ckpt=lidar_ckpt,
-    teacher=dict(
-        type='LidarSegmentorPointOcc',
-        lidar_tokenizer=dict(
-            type='CylinderEncoder_Occ',
-            grid_size=grid_size,
-            in_channels=9,
-            out_channels=128,
-            fea_compre=None,
-            base_channels=128,
-            split=[8, 8, 8],
-            track_running_stats=False,
-        ),
-        lidar_backbone=Swin,
-        lidar_neck=GeneralizedLSSFPN,
-        tpv_transformer=dict(type='TPVTransformer_Lidar_V0',
-                             tpv_h=tpv_h_,
-                             tpv_w=tpv_w_,
-                             tpv_z=tpv_z_,
-                             grid_size_occ=occ_size,
-                             coarse_ratio=coarse_ratio,
-                             scale_h=scale_h,
-                             scale_w=scale_w,
-                             scale_z=scale_z),
-        tpv_aggregator=dict(type='TPVAggregator_Lidar_V0'),
-        pts_bbox_head=OccHead,
+    type='FastOccV1',
+    img_backbone=dict(
+        type='CustomEfficientNet',
+        arch='b7',
+        drop_path_rate=0.2,
+        frozen_stages=0,
+        norm_eval=False,
+        out_indices=(2, 3, 4, 5, 6),
+        with_cp=True,
+        init_cfg=dict(type='Pretrained',
+                      prefix='backbone',
+                      checkpoint='./pretrain/efficientnet-b7_3rdparty_8xb32-aa_in1k_20220119-bf03951c.pth'),
     ),
-    student=dict(
-        type='CameraSegmentorEfficientSSC',
-        img_backbone=dict(
-            type='CustomEfficientNet',
-            arch='b7',
-            drop_path_rate=0.2,
-            frozen_stages=0,
-            norm_eval=False,
-            out_indices=(2, 3, 4, 5, 6),
-            with_cp=True,
-            init_cfg=dict(type='Pretrained',
-                          prefix='backbone',
-                          checkpoint='./pretrain/efficientnet-b7_3rdparty_8xb32-aa_in1k_20220119-bf03951c.pth'),
-        ),
-        img_neck=dict(type='SECONDFPN',
-                      in_channels=[48, 80, 224, 640, 2560],
-                      upsample_strides=[0.5, 1, 2, 4, 4],
-                      out_channels=[128, 128, 128, 128, 128]),
-        depth_net=dict(
-            type='GeometryDepth_Net',
-            downsample=8,
-            numC_input=640,
-            numC_Trans=numC_Trans,
-            cam_channels=33,
-            grid_config=grid_config,
-            loss_depth_type='kld',
-            loss_depth_weight=0.0001,
-        ),
-        img_view_transformer=dict(
-            type='ViewTransformerLSS',
-            downsample=8,
-            grid_config=grid_config,
-            data_config=data_config,
-        ),
-        proposal_layer=dict(
-            type='VoxelProposalLayer',
-            point_cloud_range=[0, -25.6, -2, 51.2, 25.6, 4.4],
-            input_dimensions=[128, 128, 16],
-            data_config=data_config,
-            init_cfg=None,
-        ),
-        VoxFormer_head=dict(
-            type='VoxFormerHead_Lite',
-            volume_h=128,
-            volume_w=128,
-            volume_z=16,
-            data_config=data_config,
-            point_cloud_range=point_cloud_range,
+    img_neck=dict(type='SECONDFPN',
+                  in_channels=[48, 80, 224, 640, 2560],
+                  upsample_strides=[0.5, 1, 2, 4, 4],
+                  out_channels=[128, 128, 128, 128, 128]),
+    depth_net=dict(
+        type='GeometryDepth_Net',
+        downsample=8,
+        numC_input=640,
+        numC_Trans=numC_Trans,
+        cam_channels=33,
+        grid_config=grid_config,
+        loss_depth_type='kld',
+        loss_depth_weight=0.0001,
+    ),
+    img_view_transformer=dict(
+        type='ViewTransformerLSS',
+        downsample=8,
+        grid_config=grid_config,
+        data_config=data_config,
+    ),
+    proposal_layer=dict(
+        type='VoxelProposalLayer',
+        point_cloud_range=[0, -25.6, -2, 51.2, 25.6, 4.4],
+        input_dimensions=[128, 128, 16],
+        data_config=data_config,
+        init_cfg=None,
+    ),
+    VoxFormer_head=dict(
+        type='VoxFormerHead_Lite',
+        volume_h=128,
+        volume_w=128,
+        volume_z=16,
+        data_config=data_config,
+        point_cloud_range=point_cloud_range,
+        embed_dims=_dim_,
+        cross_transformer=dict(
+            type='PerceptionTransformer_DFA3D',
+            rotate_prev_bev=True,
+            use_shift=True,
             embed_dims=_dim_,
-            cross_transformer=dict(
-                type='PerceptionTransformer_DFA3D',
-                rotate_prev_bev=True,
-                use_shift=True,
-                embed_dims=_dim_,
-                num_cams=_num_cams_,
-                encoder=dict(
-                    type='VoxFormerEncoder_DFA3D',
-                    num_layers=_num_layers_cross_,
-                    pc_range=point_cloud_range,
-                    data_config=data_config,
-                    num_points_in_pillar=8,
-                    return_intermediate=False,
-                    transformerlayers=dict(
-                        type='VoxFormerLayer',
-                        attn_cfgs=[
-                            dict(
-                                type='DeformCrossAttention_DFA3D',
-                                pc_range=point_cloud_range,
-                                num_cams=_num_cams_,
-                                deformable_attention=dict(type='MSDeformableAttention3D_DFA3D',
-                                                          embed_dims=_dim_,
-                                                          num_points=_num_points_cross_,
-                                                          num_levels=_num_levels_),
-                                embed_dims=_dim_,
-                            ),
-                        ],
-                        ffn_cfgs=dict(
-                            type='FFN',
+            num_cams=_num_cams_,
+            encoder=dict(
+                type='VoxFormerEncoder_DFA3D',
+                num_layers=_num_layers_cross_,
+                pc_range=point_cloud_range,
+                data_config=data_config,
+                num_points_in_pillar=8,
+                return_intermediate=False,
+                transformerlayers=dict(
+                    type='VoxFormerLayer',
+                    attn_cfgs=[
+                        dict(
+                            type='DeformCrossAttention_DFA3D',
+                            pc_range=point_cloud_range,
+                            num_cams=_num_cams_,
+                            deformable_attention=dict(type='MSDeformableAttention3D_DFA3D',
+                                                      embed_dims=_dim_,
+                                                      num_points=_num_points_cross_,
+                                                      num_levels=_num_levels_),
                             embed_dims=_dim_,
-                            feedforward_channels=1024,
-                            num_fcs=2,
-                            ffn_drop=0.,
-                            act_cfg=dict(type='ReLU', inplace=True),
                         ),
-                        feedforward_channels=_dim_ * 2,
-                        ffn_dropout=0.1,
-                        operation_order=('cross_attn', 'norm', 'ffn', 'norm'),
+                    ],
+                    ffn_cfgs=dict(
+                        type='FFN',
+                        embed_dims=_dim_,
+                        feedforward_channels=1024,
+                        num_fcs=2,
+                        ffn_drop=0.,
+                        act_cfg=dict(type='ReLU', inplace=True),
                     ),
+                    feedforward_channels=_dim_ * 2,
+                    ffn_dropout=0.1,
+                    operation_order=('cross_attn', 'norm', 'ffn', 'norm'),
                 ),
             ),
-            mlp_prior=True,
         ),
-        tpv_transformer=dict(
-            type='TPVTransformer_Cam_V0',
+        mlp_prior=True,
+    ),
+    occ_encoder_backbone=dict(
+        type='TPVV1',
+        global_aggregator=dict(
+            type='TPVGlobalAggregator_Cam',
             embed_dims=_dim_,
             split=[8, 8, 8],
             grid_size=[128, 128, 16],
             global_encoder_backbone=Swin,
             global_encoder_neck=GeneralizedLSSFPN,
         ),
-        tpv_aggregator=dict(
-            type='TPVAggregator_Cam_V0',
-        ),
-        pts_bbox_head=OccHead,
-        ),
+    ),
+    pts_bbox_head=OccHead,
 )
 """Training params."""
 learning_rate = 3e-4
