@@ -6,6 +6,7 @@ from mmdet3d.models import builder
 from mmcv.runner import force_fp32
 import os
 import torch.nn.functional as F
+from torch.nn.functional import cosine_similarity
 import pdb
 from debug.utils import print_detail as pd, mem, save_feature_map_as_image, save_denormalized_images
 
@@ -19,6 +20,7 @@ class DistillOccV0(BaseModule):
         teacher_ckpt,
         student,
         ratio_logit=10.0,
+        ratio_tpv_feats=1,
         **kwargs,
     ):
 
@@ -28,13 +30,14 @@ class DistillOccV0(BaseModule):
         self.student = builder.build_detector(student)
 
         self.ratio_logit = ratio_logit
+        self.ratio_tpv_feats = ratio_tpv_feats
 
         if os.path.exists(teacher_ckpt):
             ckpt = torch.load(teacher_ckpt)['state_dict']
             adjusted_ckpt = {key.replace('model.', ''): value for key, value in ckpt.items()}
             self.teacher.load_state_dict(adjusted_ckpt)
             print(f"Load teacher model from {teacher_ckpt}")
-        
+
         self.freeze_model(self.teacher)
 
     def freeze_model(self, model):
@@ -64,7 +67,6 @@ class DistillOccV0(BaseModule):
         x_flat = x.reshape(B, C, -1)
         y_flat = y.reshape(B, C, -1)
 
-
         # # 计算归一化后的特征，使特征在C维度上具有单位长度
         x_norm = F.normalize(x_flat, p=2, dim=1)
         y_norm = F.normalize(y_flat, p=2, dim=1)
@@ -73,21 +75,46 @@ class DistillOccV0(BaseModule):
         cosine_similarity_flat = torch.bmm(x_norm.permute(0, 2, 1), y_norm)
 
         return cosine_similarity_flat
-    
-    def distill_loss_logits(self, logits_teacher, logits_student, target, ratio):
-        logits_student_softmax = F.log_softmax(logits_student, dim=1)  
-        logits_teacher_softmax = F.softmax(logits_teacher, dim=1)
 
-        loss=0
+    def distill_loss_logits(self, logits_teacher, logits_student, target, ratio):
+        b, c, h, w, z = logits_teacher.shape
+        logits_student_softmax = F.log_softmax(logits_student, dim=1).permute(0, 2, 3, 4, 1).reshape(b, h * w * z, c)
+        logits_teacher_softmax = F.softmax(logits_teacher, dim=1).permute(0, 2, 3, 4, 1).reshape(b, h * w * z, c)
+        target = target.reshape(b, h * w * z)
+
+        loss = 0
         for i in range(target.shape[0]):
-            valid = (target[i].unsqueeze(0) != 255).expand_as(logits_teacher[i])
-            logits_teacher_i = logits_teacher_softmax[i][valid]
+            valid = (target[i] != 255)
             logits_student_i = logits_student_softmax[i][valid]
+            logits_teacher_i = logits_teacher_softmax[i][valid]
             loss += nn.KLDivLoss(reduction="mean")(logits_student_i.unsqueeze(0), logits_teacher_i.unsqueeze(0))
         loss = loss / float(target.size(0)) * ratio
         return dict(loss_distill_logits=loss)
 
-    def distill_loss_tpv(self, tpv_teacher, tpv_student):
+    def distill_loss_tpv(self, tpv_teacher, tpv_student, target, ratio):
+        loss = 0
+        for i in range(target.shape[0]):
+            # target_i = target[i].to(torch.float32)
+            tpv_xy_teacher_i = tpv_teacher[0][i]
+            tpv_xy_student_i = tpv_student[0][i]
+            cos_sim = cosine_similarity(tpv_xy_student_i, tpv_xy_teacher_i, dim=0)
+            loss_xy = 1 - cos_sim.mean()
+
+            tpv_yz_teacher_i = tpv_teacher[1][i]
+            tpv_yz_student_i = tpv_student[1][i]
+            cos_sim = cosine_similarity(tpv_yz_student_i, tpv_yz_teacher_i, dim=0)
+            loss_yz = 1 - cos_sim.mean()
+
+            tpv_zx_teacher_i = tpv_teacher[2][i]
+            tpv_zx_student_i = tpv_student[2][i]
+            cos_sim = cosine_similarity(tpv_zx_student_i, tpv_zx_teacher_i, dim=0)
+            loss_zx = 1 - cos_sim.mean()
+
+            loss += loss_xy + loss_yz + loss_zx
+
+        return dict(loss_distill_tpv=loss * ratio)
+
+    def distill_loss_relation(self, relation_teacher, relation_student, target, ratio):
         return
 
     def forward(self, data_dict):
@@ -100,8 +127,8 @@ class DistillOccV0(BaseModule):
         img_metas = data_dict['img_metas']
         gt_occ = data_dict['gt_occ']
         img_inputs = data_dict['img_inputs']
-        # lidar branch
 
+        # lidar branch
         with torch.no_grad():
             points = data_dict['points'][0]
             grid_ind = data_dict['grid_ind'][0]
@@ -112,7 +139,6 @@ class DistillOccV0(BaseModule):
             output_lidar = self.teacher.pts_bbox_head(voxel_feats=x_3d_lidar, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
         # camera branch
-
         img_voxel_feats, query_proposal, depth = self.student.extract_img_feat(img_inputs, img_metas)
         tpv_lists_cam = self.student.tpv_transformer(img_voxel_feats)
         x_3d_cam = self.student.tpv_aggregator(tpv_lists_cam)
@@ -125,10 +151,12 @@ class DistillOccV0(BaseModule):
         )
         losses.update(losses_occupancy)
 
-        losses_distill_logit = self.distill_loss_logits(output_lidar['output_voxels'], output_cam['output_voxels'], gt_occ, self.ratio_logit)
+        losses_distill_logit = self.distill_loss_logits(output_lidar['output_voxels'], output_cam['output_voxels'], gt_occ,
+                                                        self.ratio_logit)
         losses.update(losses_distill_logit)
 
-        # losses_distill_tpv = self.distill_loss_tpv(tpv_lists_lidar, tpv_lists_cam)
+        losses_distill_tpv = self.distill_loss_tpv(tpv_lists_lidar, tpv_lists_cam, gt_occ, self.ratio_tpv_feats)
+        losses.update(losses_distill_tpv)
 
         pred = output_cam['output_voxels']
         pred = torch.argmax(pred, dim=1)
