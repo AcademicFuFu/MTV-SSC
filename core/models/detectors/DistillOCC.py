@@ -155,8 +155,8 @@ class DistillOccV0(BaseModule):
                                                         self.ratio_logit)
         losses.update(losses_distill_logit)
 
-        losses_distill_tpv = self.distill_loss_tpv(tpv_lists_lidar, tpv_lists_cam, gt_occ, self.ratio_tpv_feats)
-        losses.update(losses_distill_tpv)
+        # losses_distill_tpv = self.distill_loss_tpv(tpv_lists_lidar, tpv_lists_cam, gt_occ, self.ratio_tpv_feats)
+        # losses.update(losses_distill_tpv)
 
         pred = output_cam['output_voxels']
         pred = torch.argmax(pred, dim=1)
