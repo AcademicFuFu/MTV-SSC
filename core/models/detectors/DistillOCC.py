@@ -20,7 +20,8 @@ class DistillOccV0(BaseModule):
         teacher_ckpt,
         student,
         ratio_logit=10.0,
-        ratio_tpv_feats=1,
+        ratio_tpv_feats=2,
+        ratio_tpv_relation=10,
         **kwargs,
     ):
 
@@ -31,6 +32,7 @@ class DistillOccV0(BaseModule):
 
         self.ratio_logit = ratio_logit
         self.ratio_tpv_feats = ratio_tpv_feats
+        self.ratio_tpv_relation = ratio_tpv_relation
 
         if os.path.exists(teacher_ckpt):
             ckpt = torch.load(teacher_ckpt)['state_dict']
@@ -91,7 +93,7 @@ class DistillOccV0(BaseModule):
         loss = loss / float(target.size(0)) * ratio
         return dict(loss_distill_logits=loss)
 
-    def distill_loss_tpv(self, tpv_teacher, tpv_student, target, ratio):
+    def distill_loss_tpv_feature(self, tpv_teacher, tpv_student, target, ratio):
         loss = 0
         for i in range(target.shape[0]):
             # target_i = target[i].to(torch.float32)
@@ -111,11 +113,38 @@ class DistillOccV0(BaseModule):
             loss_zx = 1 - cos_sim.mean()
 
             loss += loss_xy + loss_yz + loss_zx
+        loss = loss * ratio / (3 * target.shape[0])
+        return dict(loss_distill_tpv=loss)
 
-        return dict(loss_distill_tpv=loss * ratio)
+    def distill_loss_tpv_relation(self, tpv_teacher, tpv_student, target, ratio):
+        loss = 0
+        tpv_teacher_i_xy = tpv_teacher[0].squeeze(4)
+        tpv_student_i_xy = tpv_student[0].squeeze(4)
+        cos_sim_student = self.calculate_cosine_similarity(tpv_student_i_xy, tpv_student_i_xy)
+        cos_sim_teacher = self.calculate_cosine_similarity(tpv_student_i_xy, tpv_teacher_i_xy)
+        diff_abs = torch.abs(cos_sim_student - cos_sim_teacher)
+        l1_norm = torch.sum(diff_abs)
+        loss_xy = l1_norm / float(diff_abs.size(1) * diff_abs.size(1))
 
-    def distill_loss_relation(self, relation_teacher, relation_student, target, ratio):
-        return
+        tpv_teacher_i_yz = tpv_teacher[1].squeeze(2)
+        tpv_student_i_yz = tpv_student[1].squeeze(2)
+        cos_sim_student = self.calculate_cosine_similarity(tpv_student_i_yz, tpv_student_i_yz)
+        cos_sim_teacher = self.calculate_cosine_similarity(tpv_student_i_yz, tpv_teacher_i_yz)
+        diff_abs = torch.abs(cos_sim_student - cos_sim_teacher)
+        l1_norm = torch.sum(diff_abs)
+        loss_yz = l1_norm / float(diff_abs.size(1) * diff_abs.size(1))
+
+        tpv_teacher_i_zx = tpv_teacher[2].squeeze(3)
+        tpv_student_i_zx = tpv_student[2].squeeze(3)
+        cos_sim_student = self.calculate_cosine_similarity(tpv_student_i_zx, tpv_student_i_zx)
+        cos_sim_teacher = self.calculate_cosine_similarity(tpv_student_i_zx, tpv_teacher_i_zx)
+        diff_abs = torch.abs(cos_sim_student - cos_sim_teacher)
+        l1_norm = torch.sum(diff_abs)
+        loss_zx = l1_norm / float(diff_abs.size(1) * diff_abs.size(1))
+
+        loss += (loss_xy + loss_yz + loss_zx) / 3
+        loss = loss * ratio / target.shape[0]
+        return dict(loss_distill_tpv_relation=loss)
 
     def forward(self, data_dict):
         if self.training:
@@ -151,14 +180,16 @@ class DistillOccV0(BaseModule):
         )
         losses.update(losses_occupancy)
 
-        # losses_distill_logit = self.distill_loss_logits(output_lidar['output_voxels'], output_cam['output_voxels'], gt_occ,
-        #                                                 self.ratio_logit)
-        # losses_distill_logit = self.distill_loss_logits(output_cam['output_voxels'], output_lidar['output_voxels'], gt_occ,
-        #                                                 self.ratio_logit)
-        # losses.update(losses_distill_logit)
+        losses_distill_logit = self.distill_loss_logits(output_lidar['output_voxels'], output_cam['output_voxels'], gt_occ,
+                                                        self.ratio_logit)
+        losses.update(losses_distill_logit)
 
-        # losses_distill_tpv = self.distill_loss_tpv(tpv_lists_lidar, tpv_lists_cam, gt_occ, self.ratio_tpv_feats)
-        # losses.update(losses_distill_tpv)
+        losses_distill_tpv_feature = self.distill_loss_tpv_feature(tpv_lists_lidar, tpv_lists_cam, gt_occ, self.ratio_tpv_feats)
+        losses.update(losses_distill_tpv_feature)
+
+        losses_distill_tpv_relation = self.distill_loss_tpv_relation(tpv_lists_lidar, tpv_lists_cam, gt_occ,
+                                                                     self.ratio_tpv_relation)
+        losses.update(losses_distill_tpv_relation)
 
         pred = output_cam['output_voxels']
         pred = torch.argmax(pred, dim=1)
