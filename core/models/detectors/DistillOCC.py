@@ -189,8 +189,8 @@ class DistillOccV0(BaseModule):
         #                                                 self.ratio_logit)
         # losses.update(losses_distill_logit)
 
-        losses_distill_tpv_feature = self.distill_loss_tpv_feature(tpv_lists_lidar, tpv_lists_cam, gt_occ, self.ratio_tpv_feats)
-        losses.update(losses_distill_tpv_feature)
+        # losses_distill_tpv_feature = self.distill_loss_tpv_feature(tpv_lists_lidar, tpv_lists_cam, gt_occ, self.ratio_tpv_feats)
+        # losses.update(losses_distill_tpv_feature)
 
         # losses_distill_tpv_relation = self.distill_loss_tpv_relation(tpv_lists_lidar, tpv_lists_cam, gt_occ,
         #                                                              self.ratio_tpv_relation)
