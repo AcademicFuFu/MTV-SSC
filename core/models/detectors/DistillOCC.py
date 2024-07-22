@@ -22,6 +22,7 @@ class DistillOccV0(BaseModule):
         ratio_logit=10.0,
         ratio_tpv_feats=2,
         ratio_tpv_relation=10,
+        init_cfg=None,
         **kwargs,
     ):
 
@@ -41,6 +42,8 @@ class DistillOccV0(BaseModule):
             print(f"Load teacher model from {teacher_ckpt}")
 
         self.freeze_model(self.teacher)
+        self.init_cfg = init_cfg
+        self.init_weights()
 
     def freeze_model(self, model):
         for param in model.parameters():
@@ -174,22 +177,24 @@ class DistillOccV0(BaseModule):
         output_cam = self.student.pts_bbox_head(voxel_feats=x_3d_cam, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
         losses = dict()
+        if depth is not None:
+            losses['loss_depth'] = self.student.depth_net.get_depth_loss(img_inputs[-4][:, 0:1, ...], depth)
         losses_occupancy = self.student.pts_bbox_head.loss(
             output_voxels=output_cam['output_voxels'],
             target_voxels=gt_occ,
         )
         losses.update(losses_occupancy)
 
-        losses_distill_logit = self.distill_loss_logits(output_lidar['output_voxels'], output_cam['output_voxels'], gt_occ,
-                                                        self.ratio_logit)
-        losses.update(losses_distill_logit)
+        # losses_distill_logit = self.distill_loss_logits(output_lidar['output_voxels'], output_cam['output_voxels'], gt_occ,
+        #                                                 self.ratio_logit)
+        # losses.update(losses_distill_logit)
 
         losses_distill_tpv_feature = self.distill_loss_tpv_feature(tpv_lists_lidar, tpv_lists_cam, gt_occ, self.ratio_tpv_feats)
         losses.update(losses_distill_tpv_feature)
 
-        losses_distill_tpv_relation = self.distill_loss_tpv_relation(tpv_lists_lidar, tpv_lists_cam, gt_occ,
-                                                                     self.ratio_tpv_relation)
-        losses.update(losses_distill_tpv_relation)
+        # losses_distill_tpv_relation = self.distill_loss_tpv_relation(tpv_lists_lidar, tpv_lists_cam, gt_occ,
+        #                                                              self.ratio_tpv_relation)
+        # losses.update(losses_distill_tpv_relation)
 
         pred = output_cam['output_voxels']
         pred = torch.argmax(pred, dim=1)

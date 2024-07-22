@@ -151,6 +151,8 @@ class CameraSegmentorEfficientSSC(BaseModule):
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
         losses = dict()
+        if depth is not None:
+            losses['loss_depth'] = self.depth_net.get_depth_loss(img_inputs[-4][:, 0:1, ...], depth)
         losses_occupancy = self.pts_bbox_head.loss(
             output_voxels=output['output_voxels'],
             target_voxels=gt_occ,
