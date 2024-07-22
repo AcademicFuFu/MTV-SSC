@@ -151,9 +151,11 @@ class DistillOccV0(BaseModule):
         )
         losses.update(losses_occupancy)
 
-        losses_distill_logit = self.distill_loss_logits(output_lidar['output_voxels'], output_cam['output_voxels'], gt_occ,
-                                                        self.ratio_logit)
-        losses.update(losses_distill_logit)
+        # losses_distill_logit = self.distill_loss_logits(output_lidar['output_voxels'], output_cam['output_voxels'], gt_occ,
+        #                                                 self.ratio_logit)
+        # losses_distill_logit = self.distill_loss_logits(output_cam['output_voxels'], output_lidar['output_voxels'], gt_occ,
+        #                                                 self.ratio_logit)
+        # losses.update(losses_distill_logit)
 
         # losses_distill_tpv = self.distill_loss_tpv(tpv_lists_lidar, tpv_lists_cam, gt_occ, self.ratio_tpv_feats)
         # losses.update(losses_distill_tpv)
