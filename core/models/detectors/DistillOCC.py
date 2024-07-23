@@ -41,7 +41,7 @@ class DistillOccV0(BaseModule):
             self.teacher.load_state_dict(adjusted_ckpt)
             print(f"Load teacher model from {teacher_ckpt}")
 
-        self.freeze_model(self.teacher)
+        # self.freeze_model(self.teacher)
         self.init_cfg = init_cfg
         self.init_weights()
 
