@@ -402,16 +402,20 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
             # self.save_tpv(tpv_lists, tpv_lists_teacher)
             # self.save_logits_map(output['output_voxels'], output_teacher['output_voxels'])
 
-            losses_distill_logit = self.distill_loss_logits(output_teacher['output_voxels'], output['output_voxels'], gt_occ,
-                                                            self.ratio_logit)
-            losses.update(losses_distill_logit)
+            if self.ratio_logit > 0:
+                losses_distill_logit = self.distill_loss_logits(output_teacher['output_voxels'], output['output_voxels'], gt_occ,
+                                                                self.ratio_logit)
+                losses.update(losses_distill_logit)
 
-            losses_distill_tpv_feature = self.distill_loss_tpv_feature(tpv_lists_teacher, tpv_lists, gt_occ, self.ratio_tpv_feats)
-            losses.update(losses_distill_tpv_feature)
+            if self.ratio_tpv_feats > 0:
+                losses_distill_tpv_feature = self.distill_loss_tpv_feature(tpv_lists_teacher, tpv_lists, gt_occ,
+                                                                           self.ratio_tpv_feats)
+                losses.update(losses_distill_tpv_feature)
 
-            losses_distill_tpv_relation = self.distill_loss_tpv_relation(tpv_lists_teacher, tpv_lists, gt_occ,
-                                                                         self.ratio_tpv_relation)
-            losses.update(losses_distill_tpv_relation)
+            if self.ratio_tpv_relation > 0:
+                losses_distill_tpv_relation = self.distill_loss_tpv_relation(tpv_lists_teacher, tpv_lists, gt_occ,
+                                                                             self.ratio_tpv_relation)
+                losses.update(losses_distill_tpv_relation)
 
         pred = output['output_voxels']
         pred = torch.argmax(pred, dim=1)
@@ -520,7 +524,7 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
 
             loss += loss_xy + loss_yz + loss_zx
         loss = loss * ratio / (3 * target.shape[0])
-        return dict(loss_distill_tpv=loss)
+        return dict(loss_distill_tpv_feature=loss)
 
     def distill_loss_tpv_relation(self, tpv_teacher, tpv_student, target, ratio):
         loss = 0
