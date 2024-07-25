@@ -44,8 +44,6 @@ class LidarSegmentorPointOcc(BaseModule):
         x_3view = self.lidar_tokenizer(points, grid_ind)
         tpv_list = []
         x_tpv = self.lidar_backbone(x_3view)
-        for name, param in self.named_parameters():
-            print(f"Parameter name: {name}, Size: {param.size()}")
 
         for x in x_tpv:
             x = self.lidar_neck(x)
