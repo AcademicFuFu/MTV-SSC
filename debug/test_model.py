@@ -57,7 +57,7 @@ def main():
 
     if args.ckpt_path is not None:
         print('load ckpt: ', args.ckpt_path)
-        model.load_state_dict(torch.load(args.ckpt_path)['state_dict'])
+        model.load_state_dict(torch.load(args.ckpt_path)['state_dict'], strict=False)
 
     if args.train_or_test == 'train':
         print('---------------------train----------------------')

@@ -243,6 +243,9 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
         if pts_bbox_head:
             self.pts_bbox_head = builder.build_head(pts_bbox_head)
 
+        self.init_cfg = init_cfg
+        self.init_weights()
+
         if teacher:
             self.teacher = builder.build_detector(teacher).eval()
             if os.path.exists(teacher_ckpt):
@@ -254,9 +257,6 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
             self.ratio_logit = ratio_logit
             self.ratio_tpv_feats = ratio_tpv_feats
             self.ratio_tpv_relation = ratio_tpv_relation
-
-        self.init_cfg = init_cfg
-        self.init_weights()
 
     def freeze_model(self, model):
         for param in model.parameters():
@@ -322,15 +322,49 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
         # pdb.set_trace()
         return x, query_proposal, depth
 
-    def save_tpv(self, tpv_list):
+    def save_tpv(self, tpv_cam, tpv_lidar=None):
+        tpv_list = tpv_cam
         # format to b,n,c,h,w
         feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
         feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
         feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
 
-        save_feature_map_as_image(feat_xy.detach(), 'save/img/tpv_neck/pca', 'xy', method='pca')
-        save_feature_map_as_image(feat_yz.detach(), 'save/img/tpv_neck/pca', 'yz', method='pca')
-        save_feature_map_as_image(feat_zx.detach(), 'save/img/tpv_neck/pca', 'zx', method='pca')
+        save_feature_map_as_image(feat_xy.detach(), 'save/distill/tpv_cam', 'xy', method='pca')
+        save_feature_map_as_image(feat_yz.detach(), 'save/distill/tpv_cam', 'yz', method='pca')
+        save_feature_map_as_image(feat_zx.detach(), 'save/distill/tpv_cam', 'zx', method='pca')
+
+        if tpv_lidar is not None:
+            tpv_list = tpv_lidar
+            feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
+            feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+            feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+
+            save_feature_map_as_image(feat_xy.detach(), 'save/distill/tpv_lidar', 'xy', method='pca')
+            save_feature_map_as_image(feat_yz.detach(), 'save/distill/tpv_lidar', 'yz', method='pca')
+            save_feature_map_as_image(feat_zx.detach(), 'save/distill/tpv_lidar', 'zx', method='pca')
+
+        # remind to comment while training
+        pdb.set_trace()
+        return
+
+    def save_logits_map(self, logits_cam, logits_lidar=None):
+        # format to b,n,c,h,w
+        feat_xy = logits_cam.mean(dim=4).unsqueeze(1).permute(0, 1, 2, 3, 4)
+        feat_yz = torch.flip(logits_cam.mean(dim=2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+        feat_zx = torch.flip(logits_cam.mean(dim=3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+
+        save_feature_map_as_image(feat_xy.detach(), 'save/distill/logits_cam', 'xy', method='pca')
+        save_feature_map_as_image(feat_yz.detach(), 'save/distill/logits_cam', 'yz', method='pca')
+        save_feature_map_as_image(feat_zx.detach(), 'save/distill/logits_cam', 'zx', method='pca')
+
+        if logits_lidar is not None:
+            feat_xy = logits_lidar.mean(dim=4).unsqueeze(1).permute(0, 1, 2, 3, 4)
+            feat_yz = torch.flip(logits_lidar.mean(dim=2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+            feat_zx = torch.flip(logits_lidar.mean(dim=3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+
+            save_feature_map_as_image(feat_xy.detach(), 'save/distill/logits_lidar', 'xy', method='pca')
+            save_feature_map_as_image(feat_yz.detach(), 'save/distill/logits_lidar', 'yz', method='pca')
+            save_feature_map_as_image(feat_zx.detach(), 'save/distill/logits_lidar', 'zx', method='pca')
 
         # remind to comment while training
         pdb.set_trace()
@@ -364,6 +398,10 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
         if hasattr(self, 'teacher'):
             with torch.no_grad():
                 tpv_lists_teacher, output_teacher = self.forward_teacher(data_dict)
+
+            # self.save_tpv(tpv_lists, tpv_lists_teacher)
+            # self.save_logits_map(output['output_voxels'], output_teacher['output_voxels'])
+
             losses_distill_logit = self.distill_loss_logits(output_teacher['output_voxels'], output['output_voxels'], gt_occ,
                                                             self.ratio_logit)
             losses.update(losses_distill_logit)
@@ -394,6 +432,16 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
         tpv_lists = self.tpv_transformer(img_voxel_feats)
         x_3d = self.tpv_aggregator(tpv_lists)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
+
+        # self.save_tpv(tpv_lists)
+        # self.save_logits_map(output['output_voxels'])
+
+        # if hasattr(self, 'teacher'):
+        #     with torch.no_grad():
+        #         tpv_lists_teacher, output_teacher = self.forward_teacher(data_dict)
+
+        #     self.save_tpv(tpv_lists, tpv_lists_teacher)
+        #     self.save_logits_map(output['output_voxels'], output_teacher['output_voxels'])
 
         pred = output['output_voxels']
         pred = torch.argmax(pred, dim=1)

@@ -44,6 +44,9 @@ class LidarSegmentorPointOcc(BaseModule):
         x_3view = self.lidar_tokenizer(points, grid_ind)
         tpv_list = []
         x_tpv = self.lidar_backbone(x_3view)
+        for name, param in self.named_parameters():
+            print(f"Parameter name: {name}, Size: {param.size()}")
+
         for x in x_tpv:
             x = self.lidar_neck(x)
             if not isinstance(x, torch.Tensor):
@@ -57,9 +60,23 @@ class LidarSegmentorPointOcc(BaseModule):
         feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
         feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
 
-        save_feature_map_as_image(feat_xy.detach(), 'save/lidar/tpv_neck/pca', 'xy', method='pca')
-        save_feature_map_as_image(feat_yz.detach(), 'save/lidar/tpv_neck/pca', 'yz', method='pca')
-        save_feature_map_as_image(feat_zx.detach(), 'save/lidar/tpv_neck/pca', 'zx', method='pca')
+        save_feature_map_as_image(feat_xy.detach(), 'save/lidar/tpv', 'xy', method='pca')
+        save_feature_map_as_image(feat_yz.detach(), 'save/lidar/tpv', 'yz', method='pca')
+        save_feature_map_as_image(feat_zx.detach(), 'save/lidar/tpv', 'zx', method='pca')
+
+        # remind to comment while training
+        pdb.set_trace()
+        return
+
+    def save_logits_map(self, logits):
+        # format to b,n,c,h,w
+        feat_xy = logits.mean(dim=4).unsqueeze(1).permute(0, 1, 2, 3, 4)
+        feat_yz = torch.flip(logits.mean(dim=2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+        feat_zx = torch.flip(logits.mean(dim=3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+
+        save_feature_map_as_image(feat_xy.detach(), 'save/lidar/logits', 'xy', method='pca')
+        save_feature_map_as_image(feat_yz.detach(), 'save/lidar/logits', 'yz', method='pca')
+        save_feature_map_as_image(feat_zx.detach(), 'save/lidar/logits', 'zx', method='pca')
 
         # remind to comment while training
         pdb.set_trace()
@@ -82,6 +99,9 @@ class LidarSegmentorPointOcc(BaseModule):
         tpv_lists = self.tpv_transformer(x_lidar_tpv, voxel_pos_grid_coarse)
         x_3d = self.tpv_aggregator(tpv_lists)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
+
+        # self.save_tpv(tpv_lists)
+        # self.save_logits_map(output['output_voxels'])
 
         losses = dict()
         losses_occupancy = self.pts_bbox_head.loss(
@@ -110,6 +130,11 @@ class LidarSegmentorPointOcc(BaseModule):
         tpv_lists = self.tpv_transformer(x_lidar_tpv, voxel_pos_grid_coarse)
         x_3d = self.tpv_aggregator(tpv_lists)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
+
+        # for name, param in self.named_parameters():
+        #     print(f"Parameter name: {name}, Size: {param.size()}")
+        # self.save_tpv(tpv_lists)
+        # self.save_logits_map(output['output_voxels'])
 
         pred = output['output_voxels']
         pred = torch.argmax(pred, dim=1)
