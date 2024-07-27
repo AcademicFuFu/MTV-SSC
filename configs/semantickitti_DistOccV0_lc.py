@@ -250,7 +250,7 @@ OccHead = dict(
 
 model = dict(
     type='CameraSegmentorEfficientSSCV1',
-    normalize_loss=True,
+    normalize_loss=False,
     teacher_ckpt=lidar_ckpt,
     teacher=dict(
         type='LidarSegmentorPointOcc',
@@ -278,8 +278,8 @@ model = dict(
         tpv_aggregator=dict(type='TPVAggregator_Lidar_V0'),
         pts_bbox_head=OccHead,
     ),
-    ratio_logit=50.0,
-    ratio_tpv_feats=0.0,
+    ratio_logit=0.0,
+    ratio_tpv_feats=10.0,
     ratio_tpv_relation=0.0,
     img_backbone=dict(
         type='CustomEfficientNet',
