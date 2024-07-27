@@ -411,7 +411,6 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
                 for key in losses_distill:
                     losses_distill[key] = losses_distill[key] / losses_distill[key]
             losses.update(losses_distill)
-            pdb.set_trace()
 
         pred = output['output_voxels']
         pred = torch.argmax(pred, dim=1)
