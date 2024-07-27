@@ -206,6 +206,7 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
         init_cfg=None,
         teacher=None,
         teacher_ckpt=None,
+        normalize_loss=False,
         ratio_logit=10.0,
         ratio_tpv_feats=2,
         ratio_tpv_relation=10,
@@ -216,33 +217,17 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
 
         self.img_backbone = builder.build_backbone(img_backbone)
         self.img_neck = builder.build_neck(img_neck)
+        self.depth_net = builder.build_neck(depth_net)
+        self.img_view_transformer = builder.build_neck(img_view_transformer)
+        self.proposal_layer = builder.build_head(proposal_layer)
+        self.VoxFormer_head = builder.build_head(VoxFormer_head)
+        self.tpv_transformer = builder.build_backbone(tpv_transformer)
+        self.tpv_aggregator = builder.build_backbone(tpv_aggregator)
+        self.pts_bbox_head = builder.build_head(pts_bbox_head)
 
-        if depth_net is not None:
-            self.depth_net = builder.build_neck(depth_net)
-        else:
-            self.depth_net = None
-        if img_view_transformer is not None:
-            self.img_view_transformer = builder.build_neck(img_view_transformer)
-        else:
-            self.img_view_transformer = None
+        self.normalize_loss = normalize_loss
 
-        if proposal_layer is not None:
-            self.proposal_layer = builder.build_head(proposal_layer)
-        else:
-            self.proposal_layer = None
-
-        if VoxFormer_head is not None:
-            self.VoxFormer_head = builder.build_head(VoxFormer_head)
-        else:
-            self.VoxFormer_head = None
-
-        if tpv_transformer:
-            self.tpv_transformer = builder.build_backbone(tpv_transformer)
-        if tpv_aggregator:
-            self.tpv_aggregator = builder.build_backbone(tpv_aggregator)
-        if pts_bbox_head:
-            self.pts_bbox_head = builder.build_head(pts_bbox_head)
-
+        # init before teacher to avoid overwriting teacher weights
         self.init_cfg = init_cfg
         self.init_weights()
 
@@ -395,6 +380,11 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
         )
         losses.update(losses_occupancy)
 
+        if self.normalize_loss:
+            for key in losses:
+                losses[key] = losses[key] / losses[key]
+
+        losses_distill = {}
         if hasattr(self, 'teacher'):
             with torch.no_grad():
                 tpv_lists_teacher, output_teacher = self.forward_teacher(data_dict)
@@ -405,17 +395,23 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
             if self.ratio_logit > 0:
                 losses_distill_logit = self.distill_loss_logits(output_teacher['output_voxels'], output['output_voxels'], gt_occ,
                                                                 self.ratio_logit)
-                losses.update(losses_distill_logit)
+                losses_distill.update(losses_distill_logit)
 
             if self.ratio_tpv_feats > 0:
                 losses_distill_tpv_feature = self.distill_loss_tpv_feature(tpv_lists_teacher, tpv_lists, gt_occ,
                                                                            self.ratio_tpv_feats)
-                losses.update(losses_distill_tpv_feature)
+                losses_distill.update(losses_distill_tpv_feature)
 
             if self.ratio_tpv_relation > 0:
                 losses_distill_tpv_relation = self.distill_loss_tpv_relation(tpv_lists_teacher, tpv_lists, gt_occ,
                                                                              self.ratio_tpv_relation)
-                losses.update(losses_distill_tpv_relation)
+                losses_distill.update(losses_distill_tpv_relation)
+
+            if self.normalize_loss:
+                for key in losses_distill:
+                    losses_distill[key] = losses_distill[key] / losses_distill[key]
+            losses.update(losses_distill)
+            pdb.set_trace()
 
         pred = output['output_voxels']
         pred = torch.argmax(pred, dim=1)

@@ -250,6 +250,7 @@ OccHead = dict(
 
 model = dict(
     type='CameraSegmentorEfficientSSCV1',
+    normalize_loss=True,
     teacher_ckpt=lidar_ckpt,
     teacher=dict(
         type='LidarSegmentorPointOcc',
