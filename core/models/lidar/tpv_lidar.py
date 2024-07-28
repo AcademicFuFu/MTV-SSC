@@ -244,3 +244,19 @@ class TPVTransformer_Lidar_V1(BaseModule):
         tpv_list[2] = F.interpolate(tpv_list[2], size=(128, 16), mode='bilinear').unsqueeze(3)
 
         return tpv_list
+
+
+@BACKBONES.register_module()
+class TPVAggregator_Lidar_V1(BaseModule):
+
+    def __init__(self, **kwargs):
+        super().__init__()
+
+    def forward(self, tpv_list):
+        feats_xy, feats_yz, feats_zx = tpv_list
+        x, y, z = feats_xy.shape[2], feats_xy.shape[3], feats_yz.shape[4]
+        feats_xy = feats_xy.repeat(1, 1, 1, 1, z)
+        feats_yz = feats_yz.repeat(1, 1, x, 1, 1)
+        feats_zx = feats_zx.repeat(1, 1, 1, y, 1)
+        out_feats = feats_xy + feats_yz + feats_zx
+        return [out_feats]

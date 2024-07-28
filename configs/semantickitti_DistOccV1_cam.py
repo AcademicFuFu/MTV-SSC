@@ -246,7 +246,7 @@ OccHead = dict(
     class_frequencies=semantic_kitti_class_frequencies,
 )
 model = dict(
-    type='CameraSegmentorEfficientSSC',
+    type='CameraSegmentorEfficientSSCV2',
     img_backbone=dict(
         type='CustomEfficientNet',
         arch='b7',
@@ -345,7 +345,10 @@ model = dict(
         global_encoder_backbone=Swin,
         global_encoder_neck=GeneralizedLSSFPN_tpvdim,
     ),
-    tpv_aggregator=dict(type='TPVAggregator_Cam_V0', ),
+    tpv_aggregator=dict(
+        type='TPVAggregator_Cam_V1',
+        embed_dims=_dim_,
+    ),
     pts_bbox_head=OccHead,
 )
 """Training params."""

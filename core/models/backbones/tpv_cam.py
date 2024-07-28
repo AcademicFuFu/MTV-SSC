@@ -90,6 +90,7 @@ class TPVTransformer_Cam_V0(BaseModule):
 
         return tpv_list
 
+
 @BACKBONES.register_module()
 class TPVAggregator_Cam_V0(BaseModule):
 
@@ -104,3 +105,22 @@ class TPVAggregator_Cam_V0(BaseModule):
         feats_zx = feats_zx.repeat(1, 1, 1, y, 1)
         out_feats = feats_xy + feats_yz + feats_zx
         return [out_feats]
+
+
+@BACKBONES.register_module()
+class TPVAggregator_Cam_V1(BaseModule):
+
+    def __init__(self, embed_dims=128, **kwargs):
+        super().__init__()
+        self.combine_coeff = nn.Sequential(nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False), nn.Softmax(dim=1))
+
+    def forward(self, tpv_list, x3d):
+        weights = self.combine_coeff(x3d)
+        out_feats = self.weighted_sum(tpv_list, weights)
+        return [out_feats]
+
+    def weighted_sum(self, global_feats, weights):
+        out_feats = global_feats[0] * weights[:, 0:1, ...]
+        for i in range(1, len(global_feats)):
+            out_feats += global_feats[i] * weights[:, i:i + 1, ...]
+        return out_feats

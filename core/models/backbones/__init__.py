@@ -10,5 +10,4 @@ from .MPVGlobalAggregatorV0 import MPVGlobalAggregatorV0
 from .MPVGlobalAggregatorV1 import MPVGlobalAggregatorV1
 from .MPVGlobalAggregatorV2 import MPVGlobalAggregatorV2
 
-
-from .tpv_cam import TPVAggregator_Cam_V0, TPVTransformer_Cam_V0
+from .tpv_cam import TPVAggregator_Cam_V0, TPVTransformer_Cam_V0, TPVAggregator_Cam_V1
