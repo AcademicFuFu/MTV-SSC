@@ -249,8 +249,9 @@ class TPVTransformer_Lidar_V1(BaseModule):
 @BACKBONES.register_module()
 class TPVAggregator_Lidar_V1(BaseModule):
 
-    def __init__(self, **kwargs):
+    def __init__(self, embed_dims=128, **kwargs):
         super().__init__()
+        self.combine_coeff = nn.Sequential(nn.Conv3d(embed_dims * 3, 3, kernel_size=1, bias=False), nn.Softmax(dim=1))
 
     def forward(self, tpv_list):
         feats_xy, feats_yz, feats_zx = tpv_list
@@ -258,5 +259,13 @@ class TPVAggregator_Lidar_V1(BaseModule):
         feats_xy = feats_xy.repeat(1, 1, 1, 1, z)
         feats_yz = feats_yz.repeat(1, 1, x, 1, 1)
         feats_zx = feats_zx.repeat(1, 1, 1, y, 1)
-        out_feats = feats_xy + feats_yz + feats_zx
+        x3d = torch.cat([feats_xy, feats_yz, feats_zx], dim=1)
+        weights = self.combine_coeff(x3d)
+        out_feats = self.weighted_sum(tpv_list, weights)
         return [out_feats]
+
+    def weighted_sum(self, global_feats, weights):
+        out_feats = global_feats[0] * weights[:, 0:1, ...]
+        for i in range(1, len(global_feats)):
+            out_feats += global_feats[i] * weights[:, i:i + 1, ...]
+        return out_feats

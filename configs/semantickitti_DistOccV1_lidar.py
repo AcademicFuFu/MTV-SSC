@@ -186,7 +186,7 @@ test_dataloader_config = dict(batch_size=1, num_workers=4)
 
 # model params #
 _dim_ = 128
-_tpv_dim_ = 192
+_tpv_dim_ = 128
 voxel_out_channels = [_tpv_dim_]
 Swin = dict(
     type='Swin',
@@ -262,20 +262,19 @@ model = dict(
     ),
     lidar_backbone=Swin,
     lidar_neck=GeneralizedLSSFPN,
-    tpv_transformer=dict(
-        type='TPVTransformer_Lidar_V1',
-        tpv_h=tpv_h_,
-        tpv_w=tpv_w_,
-        tpv_z=tpv_z_,
-        grid_size_occ=occ_size,
-        coarse_ratio=coarse_ratio,
-        scale_h=scale_h,
-        scale_w=scale_w,
-        scale_z=scale_z,
-        tpv_backbone=Swin,
-        tpv_neck=GeneralizedLSSFPN_,
+    tpv_transformer=dict(type='TPVTransformer_Lidar_V0',
+                         tpv_h=tpv_h_,
+                         tpv_w=tpv_w_,
+                         tpv_z=tpv_z_,
+                         grid_size_occ=occ_size,
+                         coarse_ratio=coarse_ratio,
+                         scale_h=scale_h,
+                         scale_w=scale_w,
+                         scale_z=scale_z),
+    tpv_aggregator=dict(
+        type='TPVAggregator_Lidar_V1',
+        embed_dims=_dim_,
     ),
-    tpv_aggregator=dict(type='TPVAggregator_Lidar_V0'),
     pts_bbox_head=OccHead,
 )
 """Training params."""

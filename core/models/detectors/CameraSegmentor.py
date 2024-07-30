@@ -792,7 +792,7 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
 
         img_voxel_feats, query_proposal, depth = self.extract_img_feat(img_inputs, img_metas)
         tpv_lists = self.tpv_transformer(img_voxel_feats)
-        x_3d = self.tpv_aggregator(tpv_lists)
+        x_3d = self.tpv_aggregator(tpv_lists, img_voxel_feats)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
         # self.save_tpv(tpv_lists)

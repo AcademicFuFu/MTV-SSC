@@ -187,7 +187,7 @@ test_dataloader_config = dict(batch_size=1, num_workers=4)
 # model params #
 _dim_ = 128
 numC_Trans = 128
-_tpv_dim_ = 192
+_tpv_dim_ = 128
 voxel_out_channels = [_tpv_dim_]
 norm_cfg = dict(type='GN', num_groups=32, requires_grad=True)
 
