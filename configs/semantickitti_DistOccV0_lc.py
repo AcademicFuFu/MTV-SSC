@@ -279,7 +279,7 @@ model = dict(
         pts_bbox_head=OccHead,
     ),
     ratio_logit=70.0,
-    ratio_tpv_feats=0.0,
+    ratio_tpv_feats=15.0,
     ratio_tpv_relation=70.0,
     img_backbone=dict(
         type='CustomEfficientNet',
