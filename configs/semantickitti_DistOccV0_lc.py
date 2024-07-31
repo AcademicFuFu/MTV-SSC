@@ -278,7 +278,7 @@ model = dict(
         tpv_aggregator=dict(type='TPVAggregator_Lidar_V0'),
         pts_bbox_head=OccHead,
     ),
-    ratio_logit=0.0,
+    ratio_logit=70.0,
     ratio_tpv_feats=0.0,
     ratio_tpv_relation=70.0,
     img_backbone=dict(
