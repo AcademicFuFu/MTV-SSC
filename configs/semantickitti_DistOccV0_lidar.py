@@ -185,7 +185,7 @@ train_dataloader_config = dict(batch_size=1, num_workers=4)
 test_dataloader_config = dict(batch_size=1, num_workers=4)
 
 # model params #
-_tpv_dim_ = 192
+_tpv_dim_ = 128
 voxel_out_channels = [_tpv_dim_]
 Swin = dict(
     type='Swin',
