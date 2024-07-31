@@ -14,17 +14,9 @@ class StereoVolumeEncoder(nn.Module):
 
     def __init__(self, in_channels, out_channels):
         super(StereoVolumeEncoder, self).__init__()
-        self.stem = convbn_2d(in_channels,
-                              out_channels,
-                              kernel_size=3,
-                              stride=1,
-                              pad=1)
+        self.stem = convbn_2d(in_channels, out_channels, kernel_size=3, stride=1, pad=1)
         self.Unet = nn.Sequential(SimpleUnet(out_channels))
-        self.conv_out = nn.Conv2d(out_channels,
-                                  out_channels,
-                                  kernel_size=1,
-                                  stride=1,
-                                  padding=0)
+        self.conv_out = nn.Conv2d(out_channels, out_channels, kernel_size=1, stride=1, padding=0)
 
     def forward(self, x):
         x = self.stem(x)
@@ -54,66 +46,49 @@ class GeometryDepth_Net(BaseModule):
         self.cam_channels = cam_channels
         self.grid_config = grid_config
 
-        ds = torch.arange(*self.grid_config['dbound'],
-                          dtype=torch.float).view(-1, 1, 1)
+        ds = torch.arange(*self.grid_config['dbound'], dtype=torch.float).view(-1, 1, 1)
         D, _, _ = ds.shape
         self.D = D
         self.cam_depth_range = self.grid_config['dbound']
-        self.stereo_volume_encoder = StereoVolumeEncoder(in_channels=D,
-                                                         out_channels=D)
-        self.depth_net = DepthNet(self.numC_input,
-                                  self.numC_input,
-                                  self.numC_Trans,
-                                  self.D,
-                                  cam_channels=self.cam_channels)
+        self.stereo_volume_encoder = StereoVolumeEncoder(in_channels=D, out_channels=D)
+        self.depth_net = DepthNet(self.numC_input, self.numC_input, self.numC_Trans, self.D, cam_channels=self.cam_channels)
 
         self.loss_depth_weight = loss_depth_weight
         self.loss_depth_type = loss_depth_type
 
         self.constant_std = 0.5
 
-        self.depth_aggregation = DepthAggregation(embed_dims=32,
-                                                  out_channels=1)
+        self.depth_aggregation = DepthAggregation(embed_dims=32, out_channels=1)
 
     @force_fp32()
     def get_bce_depth_loss(self, depth_labels, depth_preds):
         _, depth_labels = self.get_downsampled_gt_depth(depth_labels)
         # depth_labels = self._prepare_depth_gt(depth_labels)
-        depth_preds = depth_preds.permute(0, 2, 3,
-                                          1).contiguous().view(-1, self.D)
+        depth_preds = depth_preds.permute(0, 2, 3, 1).contiguous().view(-1, self.D)
         fg_mask = torch.max(depth_labels, dim=1).values > 0.0
         depth_labels = depth_labels[fg_mask]
         depth_preds = depth_preds[fg_mask]
 
         with autocast(enabled=False):
-            depth_loss = F.binary_cross_entropy(
-                depth_preds, depth_labels, reduction='none').sum() / max(
-                    1.0, fg_mask.sum())
+            depth_loss = F.binary_cross_entropy(depth_preds, depth_labels, reduction='none').sum() / max(1.0, fg_mask.sum())
 
         return depth_loss
 
     @force_fp32()
     def get_klv_depth_loss(self, depth_labels, depth_preds):
-        depth_gaussian_labels, depth_values = generate_guassian_depth_target(
-            depth_labels,
-            self.downsample,
-            self.cam_depth_range,
-            constant_std=self.constant_std)
+        depth_gaussian_labels, depth_values = generate_guassian_depth_target(depth_labels,
+                                                                             self.downsample,
+                                                                             self.cam_depth_range,
+                                                                             constant_std=self.constant_std)
 
         depth_values = depth_values.view(-1)
-        fg_mask = (depth_values
-                   >= self.cam_depth_range[0]) & (depth_values <= (
-                       self.cam_depth_range[1] - self.cam_depth_range[2]))
+        fg_mask = (depth_values >= self.cam_depth_range[0]) & (depth_values
+                                                               <= (self.cam_depth_range[1] - self.cam_depth_range[2]))
 
         depth_gaussian_labels = depth_gaussian_labels.view(-1, self.D)[fg_mask]
-        depth_preds = depth_preds.permute(0, 2, 3,
-                                          1).contiguous().view(-1,
-                                                               self.D)[fg_mask]
+        depth_preds = depth_preds.permute(0, 2, 3, 1).contiguous().view(-1, self.D)[fg_mask]
 
-        depth_loss = F.kl_div(torch.log(depth_preds + 1e-4),
-                              depth_gaussian_labels,
-                              reduction='batchmean',
-                              log_target=False)
+        depth_loss = F.kl_div(torch.log(depth_preds + 1e-4), depth_gaussian_labels, reduction='batchmean', log_target=False)
 
         return depth_loss
 
@@ -138,30 +113,20 @@ class GeometryDepth_Net(BaseModule):
             gt_depths: [B*N*h*w, d]
         """
         B, N, H, W = gt_depths.shape
-        gt_depths = gt_depths.view(B * N, H // self.downsample,
-                                   self.downsample, W // self.downsample,
-                                   self.downsample, 1)
+        gt_depths = gt_depths.view(B * N, H // self.downsample, self.downsample, W // self.downsample, self.downsample, 1)
         gt_depths = gt_depths.permute(0, 1, 3, 5, 2, 4).contiguous()
         gt_depths = gt_depths.view(-1, self.downsample * self.downsample)
-        gt_depths_tmp = torch.where(gt_depths == 0.0,
-                                    1e5 * torch.ones_like(gt_depths),
-                                    gt_depths)
+        gt_depths_tmp = torch.where(gt_depths == 0.0, 1e5 * torch.ones_like(gt_depths), gt_depths)
         gt_depths = torch.min(gt_depths_tmp, dim=-1).values
-        gt_depths = gt_depths.view(B * N, H // self.downsample,
-                                   W // self.downsample)
+        gt_depths = gt_depths.view(B * N, H // self.downsample, W // self.downsample)
 
         # [min - step / 2, min + step / 2] creates min depth
-        gt_depths = (
-            gt_depths -
-            (self.grid_config['dbound'][0] - self.grid_config['dbound'][2] / 2)
-        ) / self.grid_config['dbound'][2]
+        gt_depths = (gt_depths -
+                     (self.grid_config['dbound'][0] - self.grid_config['dbound'][2] / 2)) / self.grid_config['dbound'][2]
         gt_depths_vals = gt_depths.clone()
 
-        gt_depths = torch.where((gt_depths < self.D + 1) & (gt_depths >= 0.0),
-                                gt_depths, torch.zeros_like(gt_depths))
-        gt_depths = F.one_hot(gt_depths.long(),
-                              num_classes=self.D + 1).view(-1, self.D + 1)[:,
-                                                                           1:]
+        gt_depths = torch.where((gt_depths < self.D + 1) & (gt_depths >= 0.0), gt_depths, torch.zeros_like(gt_depths))
+        gt_depths = F.one_hot(gt_depths.long(), num_classes=self.D + 1).view(-1, self.D + 1)[:, 1:]
 
         return gt_depths_vals, gt_depths.float()
 
@@ -222,8 +187,7 @@ class GeometryDepth_Net(BaseModule):
             ],
                                     dim=-1)
 
-        sensor2ego = torch.cat([rot, tran.reshape(B, N, 3, 1)],
-                               dim=-1).reshape(B, N, -1)
+        sensor2ego = torch.cat([rot, tran.reshape(B, N, 3, 1)], dim=-1).reshape(B, N, -1)
         mlp_input = torch.cat([mlp_input, sensor2ego], dim=-1)
 
         return mlp_input
