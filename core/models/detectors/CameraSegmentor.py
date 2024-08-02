@@ -498,49 +498,48 @@ class CameraSegmentorEfficientSSCV1(BaseModule):
         loss = loss / float(target.size(0)) * ratio
         return dict(loss_distill_logits=loss)
 
-    def distill_loss_tpv_feature(self, tpv_teacher, tpv_student, target, ratio):
-        loss = 0
-        for i in range(target.shape[0]):
-            # target_i = target[i].to(torch.float32)
-            tpv_xy_teacher_i = tpv_teacher[0][i]
-            tpv_xy_student_i = tpv_student[0][i]
-            cos_sim = cosine_similarity(tpv_xy_student_i, tpv_xy_teacher_i, dim=0)
-            loss_xy = 1 - cos_sim.mean()
-
-            tpv_yz_teacher_i = tpv_teacher[1][i]
-            tpv_yz_student_i = tpv_student[1][i]
-            cos_sim = cosine_similarity(tpv_yz_student_i, tpv_yz_teacher_i, dim=0)
-            loss_yz = 1 - cos_sim.mean()
-
-            tpv_zx_teacher_i = tpv_teacher[2][i]
-            tpv_zx_student_i = tpv_student[2][i]
-            cos_sim = cosine_similarity(tpv_zx_student_i, tpv_zx_teacher_i, dim=0)
-            loss_zx = 1 - cos_sim.mean()
-
-            loss += loss_xy + loss_yz + loss_zx
-        loss = loss * ratio / (3 * target.shape[0])
-        return dict(loss_distill_tpv_feature=loss)
-
     # def distill_loss_tpv_feature(self, tpv_teacher, tpv_student, target, ratio):
     #     loss = 0
     #     for i in range(target.shape[0]):
     #         # target_i = target[i].to(torch.float32)
     #         tpv_xy_teacher_i = tpv_teacher[0][i]
     #         tpv_xy_student_i = tpv_student[0][i]
-    #         loss_xy = F.l1_loss(tpv_xy_student_i, tpv_xy_teacher_i)
+    #         cos_sim = cosine_similarity(tpv_xy_student_i, tpv_xy_teacher_i, dim=0)
+    #         loss_xy = 1 - cos_sim.mean()
 
     #         tpv_yz_teacher_i = tpv_teacher[1][i]
     #         tpv_yz_student_i = tpv_student[1][i]
-    #         loss_yz = F.l1_loss(tpv_yz_student_i, tpv_yz_teacher_i)
+    #         cos_sim = cosine_similarity(tpv_yz_student_i, tpv_yz_teacher_i, dim=0)
+    #         loss_yz = 1 - cos_sim.mean()
 
     #         tpv_zx_teacher_i = tpv_teacher[2][i]
     #         tpv_zx_student_i = tpv_student[2][i]
-    #         loss_zx = F.l1_loss(tpv_zx_student_i, tpv_zx_teacher_i)
+    #         cos_sim = cosine_similarity(tpv_zx_student_i, tpv_zx_teacher_i, dim=0)
+    #         loss_zx = 1 - cos_sim.mean()
 
     #         loss += loss_xy + loss_yz + loss_zx
-    #         pdb.set_trace()
     #     loss = loss * ratio / (3 * target.shape[0])
     #     return dict(loss_distill_tpv_feature=loss)
+
+    def distill_loss_tpv_feature(self, tpv_teacher, tpv_student, target, ratio):
+        loss = 0
+        for i in range(target.shape[0]):
+            # target_i = target[i].to(torch.float32)
+            tpv_xy_teacher_i = tpv_teacher[0][i]
+            tpv_xy_student_i = tpv_student[0][i]
+            loss_xy = F.l1_loss(tpv_xy_student_i, tpv_xy_teacher_i)
+
+            tpv_yz_teacher_i = tpv_teacher[1][i]
+            tpv_yz_student_i = tpv_student[1][i]
+            loss_yz = F.l1_loss(tpv_yz_student_i, tpv_yz_teacher_i)
+
+            tpv_zx_teacher_i = tpv_teacher[2][i]
+            tpv_zx_student_i = tpv_student[2][i]
+            loss_zx = F.l1_loss(tpv_zx_student_i, tpv_zx_teacher_i)
+
+            loss += loss_xy + loss_yz + loss_zx
+        loss = loss * ratio / (3 * target.shape[0])
+        return dict(loss_distill_tpv_feature=loss)
 
     def distill_loss_tpv_relation(self, tpv_teacher, tpv_student, target, ratio):
         loss = 0
