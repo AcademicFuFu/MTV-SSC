@@ -177,6 +177,7 @@ Swin = dict(
     convert_weights=True,
     init_cfg=dict(type='Pretrained', checkpoint='pretrain/swin_tiny_patch4_window7_224.pth'),
 )
+
 GeneralizedLSSFPN = dict(
     type='GeneralizedLSSFPN',
     in_channels=[192, 384, 768],
@@ -187,6 +188,7 @@ GeneralizedLSSFPN = dict(
     act_cfg=dict(type='ReLU', inplace=True),
     upsample_cfg=dict(mode='bilinear', align_corners=False),
 )
+
 OccHead = dict(
     type='OccHead',
     in_channels=[sum(voxel_out_channels)],
