@@ -3,7 +3,7 @@ ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
 stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
 camera_used = ['left']
 
-dataset_type = 'SemanticKITTIDatasetLC'
+dataset_type = 'SemanticKITTIDataset'
 point_cloud_range = [0, -25.6, -2, 51.2, 25.6, 4.4]
 occ_size = [256, 256, 32]
 lss_downsample = [2, 2, 2]
@@ -81,37 +81,12 @@ data_config = {
     'resize_test': 0.00,
 }
 
-# lidar
-tpv_w_ = 128
-tpv_h_ = 128
-tpv_z_ = 16
-scale_w = 2
-scale_h = 2
-scale_z = 2
-grid_size = [256, 256, 32]
-coarse_ratio = 2
-
 train_pipeline = [
     dict(type='LoadMultiViewImageFromFiles_SemanticKitti',
          data_config=data_config,
          load_stereo_depth=True,
          is_train=True,
          color_jitter=(0.4, 0.4, 0.4)),
-    dict(
-        type='LoadLidarPointsFromFiles_SemanticKitti',
-        data_config=data_config,
-        is_train=True,
-    ),
-    dict(
-        type='LidarPointsPreProcess_SemanticKitti',
-        data_config=data_config,
-        point_cloud_range=point_cloud_range,
-        grid_size=grid_size,
-        grid_size_vox=[tpv_w_ * scale_w, tpv_h_ * scale_h, tpv_z_ * scale_z],
-        grid_size_occ=occ_size,
-        coarse_ratio=coarse_ratio,
-        is_train=True,
-    ),
     dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti'),
     dict(type='LoadSemKittiAnnotation',
          bda_aug_conf=bda_aug_conf,
@@ -142,21 +117,6 @@ test_pipeline = [
          load_stereo_depth=True,
          is_train=False,
          color_jitter=None),
-    dict(
-        type='LoadLidarPointsFromFiles_SemanticKitti',
-        data_config=data_config,
-        is_train=False,
-    ),
-    dict(
-        type='LidarPointsPreProcess_SemanticKitti',
-        data_config=data_config,
-        point_cloud_range=point_cloud_range,
-        grid_size=grid_size,
-        grid_size_vox=[tpv_w_ * scale_w, tpv_h_ * scale_h, tpv_z_ * scale_z],
-        grid_size_occ=occ_size,
-        coarse_ratio=coarse_ratio,
-        is_train=False,
-    ),
     dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti'),
     dict(type='LoadSemKittiAnnotation',
          bda_aug_conf=bda_aug_conf,
@@ -187,14 +147,13 @@ test_dataloader_config = dict(batch_size=1, num_workers=4)
 # model params #
 _dim_ = 128
 numC_Trans = 128
-_tpv_dim_ = 128
-voxel_out_channels = [_tpv_dim_]
 norm_cfg = dict(type='GN', num_groups=32, requires_grad=True)
 
 _num_layers_cross_ = 3
 _num_points_cross_ = 8
 _num_levels_ = 1
 _num_cams_ = 1
+voxel_out_channels = [_dim_]
 
 Swin = dict(
     type='Swin',
@@ -205,7 +164,7 @@ Swin = dict(
     mlp_ratio=4,
     in_channels=128,
     patch_size=4,
-    strides=[1, 2, 2, 2],
+    strides=[1, 1, 2, 2],
     frozen_stages=-1,
     qkv_bias=True,
     qk_scale=None,
@@ -218,10 +177,10 @@ Swin = dict(
     convert_weights=True,
     init_cfg=dict(type='Pretrained', checkpoint='pretrain/swin_tiny_patch4_window7_224.pth'),
 )
-GeneralizedLSSFPN_tpvdim = dict(
+GeneralizedLSSFPN = dict(
     type='GeneralizedLSSFPN',
     in_channels=[192, 384, 768],
-    out_channels=_tpv_dim_,
+    out_channels=_dim_,
     start_level=0,
     num_outs=3,
     norm_cfg=dict(type='BN2d', requires_grad=True, track_running_stats=False),
@@ -245,6 +204,7 @@ OccHead = dict(
     norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
     class_frequencies=semantic_kitti_class_frequencies,
 )
+
 model = dict(
     type='CameraSegmentorEfficientSSCV2',
     img_backbone=dict(
@@ -343,7 +303,7 @@ model = dict(
         split=[8, 8, 8],
         grid_size=[128, 128, 16],
         global_encoder_backbone=Swin,
-        global_encoder_neck=GeneralizedLSSFPN_tpvdim,
+        global_encoder_neck=GeneralizedLSSFPN,
     ),
     tpv_aggregator=dict(
         type='TPVAggregator_Cam_V1',

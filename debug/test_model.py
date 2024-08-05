@@ -59,6 +59,10 @@ def main():
         print('load ckpt: ', args.ckpt_path)
         model.load_state_dict(torch.load(args.ckpt_path)['state_dict'], strict=False)
 
+    # 计算模型的所有可训练参数总量
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total trainable parameters: {total_params/np.power(10, 6):.2f}M")
+
     if args.train_or_test == 'train':
         print('---------------------train----------------------')
         dl = data_dm.train_dataloader()

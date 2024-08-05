@@ -345,9 +345,7 @@ model = dict(
         global_encoder_backbone=Swin,
         global_encoder_neck=GeneralizedLSSFPN,
     ),
-    tpv_aggregator=dict(
-        type='TPVAggregator_Cam_V0',
-    ),
+    tpv_aggregator=dict(type='TPVAggregator_Cam_V0', ),
     pts_bbox_head=OccHead,
 )
 """Training params."""

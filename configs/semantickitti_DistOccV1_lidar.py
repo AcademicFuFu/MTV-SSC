@@ -82,13 +82,7 @@ data_config = {
 }
 
 # lidar
-tpv_w_ = 128
-tpv_h_ = 128
-tpv_z_ = 16
-scale_w = 2
-scale_h = 2
-scale_z = 2
-grid_size = [256, 256, 32]
+grid_size = [320, 320, 40]
 coarse_ratio = 2
 
 train_pipeline = [
@@ -107,7 +101,7 @@ train_pipeline = [
         data_config=data_config,
         point_cloud_range=point_cloud_range,
         grid_size=grid_size,
-        grid_size_vox=[tpv_w_ * scale_w, tpv_h_ * scale_h, tpv_z_ * scale_z],
+        grid_size_vox=grid_size,
         grid_size_occ=occ_size,
         coarse_ratio=coarse_ratio,
         is_train=True,
@@ -152,7 +146,7 @@ test_pipeline = [
         data_config=data_config,
         point_cloud_range=point_cloud_range,
         grid_size=grid_size,
-        grid_size_vox=[tpv_w_ * scale_w, tpv_h_ * scale_h, tpv_z_ * scale_z],
+        grid_size_vox=grid_size,
         grid_size_occ=occ_size,
         coarse_ratio=coarse_ratio,
         is_train=False,
@@ -186,8 +180,8 @@ test_dataloader_config = dict(batch_size=1, num_workers=4)
 
 # model params #
 _dim_ = 128
-_tpv_dim_ = 128
-voxel_out_channels = [_tpv_dim_]
+voxel_out_channels = [_dim_]
+
 Swin = dict(
     type='Swin',
     embed_dims=96,
@@ -197,7 +191,7 @@ Swin = dict(
     mlp_ratio=4,
     in_channels=128,
     patch_size=4,
-    strides=[1, 2, 2, 2],
+    strides=[1, 1, 2, 2],
     frozen_stages=-1,
     qkv_bias=True,
     qk_scale=None,
@@ -210,21 +204,11 @@ Swin = dict(
     convert_weights=True,
     init_cfg=dict(type='Pretrained', checkpoint='pretrain/swin_tiny_patch4_window7_224.pth'),
 )
+
 GeneralizedLSSFPN = dict(
     type='GeneralizedLSSFPN',
     in_channels=[192, 384, 768],
     out_channels=_dim_,
-    start_level=0,
-    num_outs=3,
-    norm_cfg=dict(type='BN2d', requires_grad=True, track_running_stats=False),
-    act_cfg=dict(type='ReLU', inplace=True),
-    upsample_cfg=dict(mode='bilinear', align_corners=False),
-)
-
-GeneralizedLSSFPN_ = dict(
-    type='GeneralizedLSSFPN',
-    in_channels=[192, 384, 768],
-    out_channels=_tpv_dim_,
     start_level=0,
     num_outs=3,
     norm_cfg=dict(type='BN2d', requires_grad=True, track_running_stats=False),
@@ -262,15 +246,12 @@ model = dict(
     ),
     lidar_backbone=Swin,
     lidar_neck=GeneralizedLSSFPN,
-    tpv_transformer=dict(type='TPVTransformer_Lidar_V0',
-                         tpv_h=tpv_h_,
-                         tpv_w=tpv_w_,
-                         tpv_z=tpv_z_,
-                         grid_size_occ=occ_size,
-                         coarse_ratio=coarse_ratio,
-                         scale_h=scale_h,
-                         scale_w=scale_w,
-                         scale_z=scale_z),
+    tpv_transformer=dict(
+        type='TPVTransformer_Lidar_V1',
+        grid_size=grid_size,
+        grid_size_occ=occ_size,
+        coarse_ratio=coarse_ratio,
+    ),
     tpv_aggregator=dict(
         type='TPVAggregator_Lidar_V1',
         embed_dims=_dim_,

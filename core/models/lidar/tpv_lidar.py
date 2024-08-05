@@ -55,26 +55,6 @@ class TPVTransformer_Lidar_V0(BaseModule):
         pdb.set_trace()
         return
 
-    def tpv_polar2cart(self, tpv_list_polar, voxels_coarse):
-        tpv_hw, tpv_zh, tpv_wz = tpv_list_polar
-        # voxel_coarse: bs, (vox_w*vox_h*vox_z)/coarse_ratio**3, 3
-        bs = 1
-        _, n, _ = voxels_coarse.shape
-        voxels_coarse = voxels_coarse.reshape(bs, 1, n, 3)
-        voxels_coarse[..., 0] = voxels_coarse[..., 0] / (self.tpv_w * self.scale_w) * 2 - 1
-        voxels_coarse[..., 1] = voxels_coarse[..., 1] / (self.tpv_h * self.scale_h) * 2 - 1
-        voxels_coarse[..., 2] = voxels_coarse[..., 2] / (self.tpv_z * self.scale_z) * 2 - 1
-
-        B, C, H, W, D = 1, 192, 128, 128, 16
-        sample_loc_vox = voxels_coarse[:, :, :, [0, 1]]
-        tpv_hw_vox = F.grid_sample(tpv_hw, sample_loc_vox, padding_mode="border").squeeze(2).view(B, C, H, W, D)[:, :, :, :, 1]
-        sample_loc_vox = voxels_coarse[:, :, :, [1, 2]]
-        tpv_zh_vox = F.grid_sample(tpv_zh, sample_loc_vox, padding_mode="border").squeeze(2).view(B, C, H, W, D)[:, :, 0, :, :]
-        sample_loc_vox = voxels_coarse[:, :, :, [2, 0]]
-        tpv_wz_vox = F.grid_sample(tpv_wz, sample_loc_vox, padding_mode="border").squeeze(2).view(B, C, H, W, D)[:, :, :, 0, :]
-        pdb.set_trace()
-        return [tpv_hw_vox, tpv_zh_vox, tpv_wz_vox]
-
     def forward(self, tpv_list, voxels_coarse=None):
         """
         x y z -> w h z
@@ -135,31 +115,16 @@ class TPVAggregator_Lidar_V0(BaseModule):
 @BACKBONES.register_module()
 class TPVTransformer_Lidar_V1(BaseModule):
 
-    def __init__(self,
-                 tpv_h,
-                 tpv_w,
-                 tpv_z,
-                 grid_size_occ,
-                 coarse_ratio,
-                 scale_h=2,
-                 scale_w=2,
-                 scale_z=2,
-                 use_checkpoint=False,
-                 tpv_backbone=None,
-                 tpv_neck=None):
+    def __init__(
+        self,
+        grid_size,
+        grid_size_occ,
+        coarse_ratio,
+    ):
         super().__init__()
-        self.tpv_h = tpv_h
-        self.tpv_w = tpv_w
-        self.tpv_z = tpv_z
-        self.scale_h = scale_h
-        self.scale_w = scale_w
-        self.scale_z = scale_z
+        self.grid_size = grid_size
         self.grid_size_occ = np.asarray(grid_size_occ).astype(np.int32)
         self.coarse_ratio = coarse_ratio
-        if tpv_backbone:
-            self.tpv_backbone = builder.build_backbone(tpv_backbone)
-        if tpv_neck:
-            self.tpv_neck = builder.build_backbone(tpv_neck)
 
     def save_tpv(self, tpv_list):
         # format to b,n,c,h,w
@@ -174,25 +139,6 @@ class TPVTransformer_Lidar_V1(BaseModule):
         # remind to comment while training
         pdb.set_trace()
         return
-
-    def tpv_polar2cart(self, tpv_list_polar, voxels_coarse):
-        tpv_hw, tpv_zh, tpv_wz = tpv_list_polar
-        # voxel_coarse: bs, (vox_w*vox_h*vox_z)/coarse_ratio**3, 3
-        bs = 1
-        _, n, _ = voxels_coarse.shape
-        voxels_coarse = voxels_coarse.reshape(bs, 1, n, 3)
-        voxels_coarse[..., 0] = voxels_coarse[..., 0] / (self.tpv_w * self.scale_w) * 2 - 1
-        voxels_coarse[..., 1] = voxels_coarse[..., 1] / (self.tpv_h * self.scale_h) * 2 - 1
-        voxels_coarse[..., 2] = voxels_coarse[..., 2] / (self.tpv_z * self.scale_z) * 2 - 1
-
-        B, C, H, W, D = 1, 192, 128, 128, 16
-        sample_loc_vox = voxels_coarse[:, :, :, [0, 1]]
-        tpv_hw_vox = F.grid_sample(tpv_hw, sample_loc_vox, padding_mode="border").squeeze(2).view(B, C, H, W, D)[:, :, :, :, 1]
-        sample_loc_vox = voxels_coarse[:, :, :, [1, 2]]
-        tpv_zh_vox = F.grid_sample(tpv_zh, sample_loc_vox, padding_mode="border").squeeze(2).view(B, C, H, W, D)[:, :, 0, :, :]
-        sample_loc_vox = voxels_coarse[:, :, :, [2, 0]]
-        tpv_wz_vox = F.grid_sample(tpv_wz, sample_loc_vox, padding_mode="border").squeeze(2).view(B, C, H, W, D)[:, :, :, 0, :]
-        return [tpv_hw_vox, tpv_zh_vox, tpv_wz_vox]
 
     def forward(self, tpv_list, voxels_coarse=None):
         """
@@ -209,19 +155,12 @@ class TPVTransformer_Lidar_V1(BaseModule):
         W, H, D = int(self.grid_size_occ[0] / self.coarse_ratio), int(self.grid_size_occ[1] / self.coarse_ratio), int(
             self.grid_size_occ[2] / self.coarse_ratio)
 
-        if self.scale_h != 1 or self.scale_w != 1:
-            tpv_hw = F.interpolate(tpv_hw, size=(int(self.tpv_h * self.scale_h), int(self.tpv_w * self.scale_w)), mode='bilinear')
-        if self.scale_z != 1 or self.scale_h != 1:
-            tpv_zh = F.interpolate(tpv_zh, size=(int(self.tpv_z * self.scale_z), int(self.tpv_h * self.scale_h)), mode='bilinear')
-        if self.scale_w != 1 or self.scale_z != 1:
-            tpv_wz = F.interpolate(tpv_wz, size=(int(self.tpv_w * self.scale_w), int(self.tpv_z * self.scale_z)), mode='bilinear')
-
         # voxel_coarse: bs, (vox_w*vox_h*vox_z)/coarse_ratio**3, 3
         _, n, _ = voxels_coarse.shape
         voxels_coarse = voxels_coarse.reshape(B, 1, n, 3)
-        voxels_coarse[..., 0] = voxels_coarse[..., 0] / (self.tpv_w * self.scale_w) * 2 - 1
-        voxels_coarse[..., 1] = voxels_coarse[..., 1] / (self.tpv_h * self.scale_h) * 2 - 1
-        voxels_coarse[..., 2] = voxels_coarse[..., 2] / (self.tpv_z * self.scale_z) * 2 - 1
+        voxels_coarse[..., 0] = voxels_coarse[..., 0] / self.grid_size[0] * 2 - 1
+        voxels_coarse[..., 1] = voxels_coarse[..., 1] / self.grid_size[1] * 2 - 1
+        voxels_coarse[..., 2] = voxels_coarse[..., 2] / self.grid_size[2] * 2 - 1
 
         sample_loc_vox = voxels_coarse[:, :, :, [0, 1]]
         tpv_hw_vox = F.grid_sample(tpv_hw, sample_loc_vox, padding_mode="border").squeeze(2).view(B, C, H, W, D)[:, :, :, :, 0]
@@ -232,16 +171,9 @@ class TPVTransformer_Lidar_V1(BaseModule):
 
         tpv_list = [tpv_hw_vox, tpv_zh_vox, tpv_wz_vox]
 
-        tpv_list = self.tpv_backbone(tpv_list)
-        for i, x in enumerate(tpv_list):
-            x = self.tpv_neck(x)
-            if not isinstance(x, torch.Tensor):
-                x = x[0]
-            tpv_list[i] = x
-
-        tpv_list[0] = F.interpolate(tpv_list[0], size=(128, 128), mode='bilinear').unsqueeze(4)
-        tpv_list[1] = F.interpolate(tpv_list[1], size=(128, 16), mode='bilinear').unsqueeze(2)
-        tpv_list[2] = F.interpolate(tpv_list[2], size=(128, 16), mode='bilinear').unsqueeze(3)
+        tpv_list[0] = F.interpolate(tpv_list[0], size=(H, W), mode='bilinear').unsqueeze(4)
+        tpv_list[1] = F.interpolate(tpv_list[1], size=(W, D), mode='bilinear').unsqueeze(2)
+        tpv_list[2] = F.interpolate(tpv_list[2], size=(H, D), mode='bilinear').unsqueeze(3)
 
         return tpv_list
 
@@ -251,7 +183,7 @@ class TPVAggregator_Lidar_V1(BaseModule):
 
     def __init__(self, embed_dims=128, **kwargs):
         super().__init__()
-        self.combine_coeff = nn.Sequential(nn.Conv3d(embed_dims * 3, 3, kernel_size=1, bias=False), nn.Softmax(dim=1))
+        self.combine_coeff = nn.Sequential(nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False), nn.Softmax(dim=1))
 
     def forward(self, tpv_list):
         feats_xy, feats_yz, feats_zx = tpv_list
@@ -259,7 +191,7 @@ class TPVAggregator_Lidar_V1(BaseModule):
         feats_xy = feats_xy.repeat(1, 1, 1, 1, z)
         feats_yz = feats_yz.repeat(1, 1, x, 1, 1)
         feats_zx = feats_zx.repeat(1, 1, 1, y, 1)
-        x3d = torch.cat([feats_xy, feats_yz, feats_zx], dim=1)
+        x3d = feats_xy + feats_yz + feats_zx
         weights = self.combine_coeff(x3d)
         out_feats = self.weighted_sum(tpv_list, weights)
         return [out_feats]
