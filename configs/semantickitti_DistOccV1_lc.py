@@ -234,8 +234,8 @@ OccHead = dict(
     occ_size=occ_size,
     loss_weight_cfg={
         "loss_voxel_ce_weight": 1.0,
-        "loss_voxel_sem_scal_weight": 1.0,
-        "loss_voxel_geo_scal_weight": 1.0
+        "loss_voxel_sem_scal_weight": 0.3,
+        "loss_voxel_geo_scal_weight": 0.5
     },
     conv_cfg=dict(type='Conv3d', bias=False),
     norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
@@ -243,11 +243,11 @@ OccHead = dict(
 )
 
 model = dict(
-    type='CameraSegmentorEfficientSSCV1',
+    type='CameraSegmentorEfficientSSCV2',
     teacher_ckpt=lidar_ckpt,
-    ratio_logit=70,
-    ratio_tpv_feats=30,
-    ratio_tpv_relation=70,
+    ratio_logit=20,
+    ratio_tpv_feats=5,
+    ratio_tpv_relation=25,
     teacher=dict(
         type='LidarSegmentorPointOcc',
         lidar_tokenizer=dict(
@@ -369,7 +369,10 @@ model = dict(
         global_encoder_backbone=Swin,
         global_encoder_neck=GeneralizedLSSFPN,
     ),
-    tpv_aggregator=dict(type='TPVAggregator_Cam_V0', ),
+    tpv_aggregator=dict(
+        type='TPVAggregator_Cam_V1',
+        embed_dims=_dim_,
+    ),
     pts_bbox_head=OccHead,
 )
 """Training params."""
