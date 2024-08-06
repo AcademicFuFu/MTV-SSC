@@ -225,8 +225,8 @@ OccHead = dict(type='OccHead',
                occ_size=occ_size,
                loss_weight_cfg={
                    "loss_voxel_ce_weight": 1.0,
-                   "loss_voxel_sem_scal_weight": 1.0,
-                   "loss_voxel_geo_scal_weight": 1.0
+                   "loss_voxel_sem_scal_weight": 0.3,
+                   "loss_voxel_geo_scal_weight": 0.5
                },
                conv_cfg=dict(type='Conv3d', bias=False),
                norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
