@@ -1,5 +1,6 @@
 import os
 import torch
+import socket
 import numpy as np
 from mmdet.datasets.builder import PIPELINES
 
@@ -9,6 +10,8 @@ class CreateDepthFromLiDAR_KITTI360(object):
 
     def __init__(self, data_root=None, dataset='kitti360'):
         self.data_root = data_root
+        if 'ai' in socket.gethostname():
+            self.data_root = '/ailab/group/pjlab-adg1/ssd_dataset/Kitti360'
         self.dataset = dataset
         assert self.dataset in ['kitti360']
 

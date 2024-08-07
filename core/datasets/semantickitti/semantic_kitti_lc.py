@@ -1,6 +1,7 @@
 import os
 import pdb
 import glob
+import socket
 import numpy as np
 from mmdet.datasets import DATASETS
 from torch.utils.data import Dataset
@@ -36,6 +37,11 @@ class SemanticKITTIDatasetLC(Dataset):
         self.data_root = data_root
         self.stereo_depth_root = stereo_depth_root
         self.ann_file = ann_file
+        if 'ai' in socket.gethostname():
+            self.data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
+            self.stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
+            self.ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
+
         self.test_mode = test_mode
         self.data_infos = self.load_annotations(self.ann_file)
 
