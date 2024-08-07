@@ -772,7 +772,7 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
             with torch.no_grad():
                 tpv_lists_teacher, output_teacher = self.forward_teacher(data_dict)
 
-            # self.save_tpv(tpv_lists, tpv_lists_teacher)
+            self.save_tpv(tpv_lists, tpv_lists_teacher)
             # self.save_logits_map(output['output_voxels'], output_teacher['output_voxels'])
 
             if self.ratio_logit > 0:
