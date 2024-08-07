@@ -875,8 +875,10 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
         loss = 0
         for i in range(target.shape[0]):
             valid = (target[i] != 255)
-            logits_student_i = logits_student_softmax[i][valid]
-            logits_teacher_i = logits_teacher_softmax[i][valid]
+            nonezero = (target[i] != 0)
+            mask = valid * nonezero
+            logits_student_i = logits_student_softmax[i][mask]
+            logits_teacher_i = logits_teacher_softmax[i][mask]
             loss += nn.KLDivLoss(reduction="mean")(logits_student_i.unsqueeze(0), logits_teacher_i.unsqueeze(0))
         loss = loss / float(target.size(0)) * ratio
         return dict(loss_distill_logits=loss)
