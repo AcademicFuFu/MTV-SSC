@@ -1,8 +1,12 @@
 lidar_ckpt = 'pretrain/distill_lidar_v1.ckpt'
 
-data_root = '/public/datasets/SemanticKITTI/dataset'
-ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
-stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+# data_root = '/public/datasets/SemanticKITTI/dataset'
+# ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
+# stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+
+data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
+stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
+ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
 camera_used = ['left']
 
 dataset_type = 'SemanticKITTIDatasetLC'

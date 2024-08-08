@@ -243,7 +243,7 @@ model = dict(
 )
 """Training params."""
 learning_rate = 3e-4
-training_steps = 25000
+training_steps = 50000
 
 optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)
 

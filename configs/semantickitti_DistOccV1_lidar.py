@@ -1,6 +1,10 @@
-data_root = '/public/datasets/SemanticKITTI/dataset'
-ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
-stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+# data_root = '/public/datasets/SemanticKITTI/dataset'
+# ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
+# stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+
+data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
+stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
+ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
 camera_used = ['left']
 
 dataset_type = 'SemanticKITTIDatasetLC'
@@ -82,7 +86,7 @@ data_config = {
 }
 
 # lidar
-grid_size = [320, 320, 40]
+grid_size = [384, 384, 48]
 coarse_ratio = 2
 
 train_pipeline = [
@@ -191,7 +195,7 @@ Swin = dict(
     mlp_ratio=4,
     in_channels=128,
     patch_size=4,
-    strides=[1, 1, 2, 2],
+    strides=[1, 2, 2, 2],
     frozen_stages=-1,
     qkv_bias=True,
     qk_scale=None,
