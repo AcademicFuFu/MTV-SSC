@@ -1,4 +1,4 @@
-lidar_ckpt = 'pretrain/distill_lidar_v1.ckpt'
+lidar_ckpt = 'pretrain/distill_lidar_v1_large.ckpt'
 
 # data_root = '/public/datasets/SemanticKITTI/dataset'
 # ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
@@ -88,7 +88,7 @@ data_config = {
 }
 
 # lidar
-grid_size = [320, 320, 40]
+grid_size = [384, 384, 48]
 coarse_ratio = 2
 
 train_pipeline = [
@@ -204,7 +204,7 @@ Swin = dict(
     mlp_ratio=4,
     in_channels=128,
     patch_size=4,
-    strides=[1, 1, 2, 2],
+    strides=[1, 2, 2, 2],
     frozen_stages=-1,
     qkv_bias=True,
     qk_scale=None,
@@ -238,8 +238,8 @@ OccHead = dict(
     occ_size=occ_size,
     loss_weight_cfg={
         "loss_voxel_ce_weight": 1.0,
-        "loss_voxel_sem_scal_weight": 0.3,
-        "loss_voxel_geo_scal_weight": 0.5
+        "loss_voxel_sem_scal_weight": 1.0,
+        "loss_voxel_geo_scal_weight": 1.0
     },
     conv_cfg=dict(type='Conv3d', bias=False),
     norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
@@ -249,7 +249,7 @@ OccHead = dict(
 model = dict(
     type='CameraSegmentorEfficientSSCV2',
     teacher_ckpt=lidar_ckpt,
-    ratio_logit=20,
+    ratio_logit=70,
     ratio_tpv_feats=0,
     ratio_tpv_relation=0,
     teacher=dict(
