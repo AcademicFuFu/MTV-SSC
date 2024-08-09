@@ -748,6 +748,7 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
         img_inputs = data_dict['img_inputs']
         img_metas = data_dict['img_metas']
         gt_occ = data_dict['gt_occ']
+        gt_occ_1_2 = img_metas['gt_occ_1_2']
 
         img_voxel_feats, query_proposal, depth = self.extract_img_feat(img_inputs, img_metas)
         tpv_lists = self.tpv_transformer(img_voxel_feats)
@@ -781,12 +782,12 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
                 losses_distill.update(losses_distill_logit)
 
             if self.ratio_tpv_feats > 0:
-                losses_distill_tpv_feature = self.distill_loss_tpv_feature(tpv_lists_teacher, tpv_lists, gt_occ,
+                losses_distill_tpv_feature = self.distill_loss_tpv_feature(tpv_lists_teacher, tpv_lists, gt_occ_1_2,
                                                                            self.ratio_tpv_feats)
                 losses_distill.update(losses_distill_tpv_feature)
 
             if self.ratio_tpv_relation > 0:
-                losses_distill_tpv_relation = self.distill_loss_tpv_relation(tpv_lists_teacher, tpv_lists, gt_occ,
+                losses_distill_tpv_relation = self.distill_loss_tpv_relation(tpv_lists_teacher, tpv_lists, gt_occ_1_2,
                                                                              self.ratio_tpv_relation)
                 losses_distill.update(losses_distill_tpv_relation)
 
@@ -922,36 +923,32 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
             tpv_zx_student_i = tpv_student[2][i]
             loss_zx = F.l1_loss(tpv_zx_student_i, tpv_zx_teacher_i)
 
-            loss += loss_xy + loss_yz + loss_zx
-        loss = loss * ratio / (3 * target.shape[0])
+            loss += (loss_xy + loss_yz + loss_zx) / 3
+        loss = loss / target.shape[0] * ratio
         return dict(loss_distill_tpv_feature=loss)
 
     def distill_loss_tpv_relation(self, tpv_teacher, tpv_student, target, ratio):
         loss = 0
-        tpv_teacher_i_xy = tpv_teacher[0].squeeze(4)
-        tpv_student_i_xy = tpv_student[0].squeeze(4)
-        cos_sim_student = self.calculate_cosine_similarity(tpv_student_i_xy, tpv_student_i_xy)
-        cos_sim_teacher = self.calculate_cosine_similarity(tpv_student_i_xy, tpv_teacher_i_xy)
-        diff_abs = torch.abs(cos_sim_student - cos_sim_teacher)
-        l1_norm = torch.sum(diff_abs)
-        loss_xy = l1_norm / float(diff_abs.size(1) * diff_abs.size(1))
+        for i in range(target.shape[0]):
+            # target_i = target[i].to(torch.float32)
+            tpv_xy_teacher_i = tpv_teacher[0][i].unsqueeze(0).squeeze(4)
+            tpv_xy_student_i = tpv_student[0][i].unsqueeze(0).squeeze(4)
+            cos_sim_student = self.calculate_cosine_similarity(tpv_xy_student_i, tpv_xy_student_i)
+            cos_sim_teacher = self.calculate_cosine_similarity(tpv_xy_teacher_i, tpv_xy_teacher_i)
+            loss_xy = F.l1_loss(cos_sim_student, cos_sim_teacher)
 
-        tpv_teacher_i_yz = tpv_teacher[1].squeeze(2)
-        tpv_student_i_yz = tpv_student[1].squeeze(2)
-        cos_sim_student = self.calculate_cosine_similarity(tpv_student_i_yz, tpv_student_i_yz)
-        cos_sim_teacher = self.calculate_cosine_similarity(tpv_student_i_yz, tpv_teacher_i_yz)
-        diff_abs = torch.abs(cos_sim_student - cos_sim_teacher)
-        l1_norm = torch.sum(diff_abs)
-        loss_yz = l1_norm / float(diff_abs.size(1) * diff_abs.size(1))
+            tpv_yz_teacher_i = tpv_teacher[1][i].unsqueeze(0).squeeze(2)
+            tpv_yz_student_i = tpv_student[1][i].unsqueeze(0).squeeze(2)
+            cos_sim_student = self.calculate_cosine_similarity(tpv_yz_student_i, tpv_yz_student_i)
+            cos_sim_teacher = self.calculate_cosine_similarity(tpv_yz_teacher_i, tpv_yz_teacher_i)
+            loss_yz = F.l1_loss(cos_sim_student, cos_sim_teacher)
 
-        tpv_teacher_i_zx = tpv_teacher[2].squeeze(3)
-        tpv_student_i_zx = tpv_student[2].squeeze(3)
-        cos_sim_student = self.calculate_cosine_similarity(tpv_student_i_zx, tpv_student_i_zx)
-        cos_sim_teacher = self.calculate_cosine_similarity(tpv_student_i_zx, tpv_teacher_i_zx)
-        diff_abs = torch.abs(cos_sim_student - cos_sim_teacher)
-        l1_norm = torch.sum(diff_abs)
-        loss_zx = l1_norm / float(diff_abs.size(1) * diff_abs.size(1))
+            tpv_zx_teacher_i = tpv_teacher[2][i].unsqueeze(0).squeeze(3)
+            tpv_zx_student_i = tpv_student[2][i].unsqueeze(0).squeeze(3)
+            cos_sim_student = self.calculate_cosine_similarity(tpv_zx_student_i, tpv_zx_student_i)
+            cos_sim_teacher = self.calculate_cosine_similarity(tpv_zx_teacher_i, tpv_zx_teacher_i)
+            loss_zx = F.l1_loss(cos_sim_student, cos_sim_teacher)
 
-        loss += (loss_xy + loss_yz + loss_zx) / 3
-        loss = loss * ratio / target.shape[0]
+            loss += (loss_xy + loss_yz + loss_zx) / 3
+        loss = loss / target.shape[0] * ratio
         return dict(loss_distill_tpv_relation=loss)
