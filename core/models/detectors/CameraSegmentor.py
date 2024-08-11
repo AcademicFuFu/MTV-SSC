@@ -593,7 +593,7 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
         ratio_logit=10.0,
         ratio_tpv_feats=2,
         ratio_tpv_relation=10,
-        tpv_conv=True,
+        tpv_conv=None,
         **kwargs,
     ):
 

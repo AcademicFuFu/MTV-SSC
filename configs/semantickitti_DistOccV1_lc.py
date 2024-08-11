@@ -1,4 +1,4 @@
-lidar_ckpt = 'pretrain/distill_lidar_v1_large.ckpt'
+lidar_ckpt = 'pretrain/distill_lidar_v1_large_with_conv.ckpt'
 
 # data_root = '/public/datasets/SemanticKITTI/dataset'
 # ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
@@ -249,9 +249,12 @@ OccHead = dict(
 model = dict(
     type='CameraSegmentorEfficientSSCV2',
     teacher_ckpt=lidar_ckpt,
-    ratio_logit=0,
+    # ratio_logit=90,
+    # ratio_tpv_feats=30,
+    # ratio_tpv_relation=40,
+    ratio_logit=90,
     ratio_tpv_feats=0,
-    ratio_tpv_relation=38,
+    ratio_tpv_relation=0,
     teacher=dict(
         type='LidarSegmentorPointOcc',
         lidar_tokenizer=dict(
@@ -272,6 +275,7 @@ model = dict(
             grid_size_occ=occ_size,
             coarse_ratio=coarse_ratio,
         ),
+        tpv_conv=dict(dim=_dim_),
         tpv_aggregator=dict(type='TPVAggregator_Lidar_V1'),
         pts_bbox_head=OccHead,
     ),
@@ -373,6 +377,7 @@ model = dict(
         global_encoder_backbone=Swin,
         global_encoder_neck=GeneralizedLSSFPN,
     ),
+    tpv_conv=dict(dim=_dim_),
     tpv_aggregator=dict(
         type='TPVAggregator_Cam_V1',
         embed_dims=_dim_,
