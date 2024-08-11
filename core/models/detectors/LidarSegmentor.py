@@ -1,4 +1,6 @@
 import torch
+import torch.nn as nn
+
 from mmcv.runner import BaseModule
 from mmdet.models import DETECTORS, HEADS
 from mmdet3d.models import builder
@@ -17,6 +19,7 @@ class LidarSegmentorPointOcc(BaseModule):
         lidar_backbone=None,
         lidar_neck=None,
         tpv_transformer=None,
+        tpv_conv=None,
         tpv_aggregator=None,
         pts_bbox_head=None,
         **kwargs,
@@ -24,18 +27,15 @@ class LidarSegmentorPointOcc(BaseModule):
 
         super().__init__()
 
-        if lidar_tokenizer:
-            self.lidar_tokenizer = builder.build_backbone(lidar_tokenizer)
-        if lidar_backbone:
-            self.lidar_backbone = builder.build_backbone(lidar_backbone)
-        if lidar_neck:
-            self.lidar_neck = builder.build_neck(lidar_neck)
-        if tpv_transformer:
-            self.tpv_transformer = builder.build_backbone(tpv_transformer)
-        if tpv_aggregator:
-            self.tpv_aggregator = builder.build_backbone(tpv_aggregator)
-        if pts_bbox_head:
-            self.pts_bbox_head = builder.build_head(pts_bbox_head)
+        self.lidar_tokenizer = builder.build_backbone(lidar_tokenizer)
+        self.lidar_backbone = builder.build_backbone(lidar_backbone)
+        self.lidar_neck = builder.build_neck(lidar_neck)
+        self.tpv_transformer = builder.build_backbone(tpv_transformer)
+        self.tpv_aggregator = builder.build_backbone(tpv_aggregator)
+        self.pts_bbox_head = builder.build_head(pts_bbox_head)
+
+        if tpv_conv is not None:
+            self.tpv_conv = nn.Conv3d(tpv_conv.dim, tpv_conv.dim, kernel_size=1)
 
         self.fp16_enabled = False
 
@@ -95,6 +95,9 @@ class LidarSegmentorPointOcc(BaseModule):
 
         x_lidar_tpv = self.extract_lidar_feat(points=points, grid_ind=grid_ind)
         tpv_lists = self.tpv_transformer(x_lidar_tpv, voxel_pos_grid_coarse)
+        if hasattr(self, 'tpv_conv'):
+            tpv_lists = [self.tpv_conv(view) for view in tpv_lists]
+
         x_3d = self.tpv_aggregator(tpv_lists)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
@@ -126,6 +129,8 @@ class LidarSegmentorPointOcc(BaseModule):
 
         x_lidar_tpv = self.extract_lidar_feat(points=points, grid_ind=grid_ind)
         tpv_lists = self.tpv_transformer(x_lidar_tpv, voxel_pos_grid_coarse)
+        if hasattr(self, 'tpv_conv'):
+            tpv_lists = [self.tpv_conv(view) for view in tpv_lists]
         x_3d = self.tpv_aggregator(tpv_lists)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 

@@ -256,6 +256,7 @@ model = dict(
         grid_size_occ=occ_size,
         coarse_ratio=coarse_ratio,
     ),
+    tpv_conv=dict(dim=_dim_),
     tpv_aggregator=dict(
         type='TPVAggregator_Lidar_V1',
         embed_dims=_dim_,

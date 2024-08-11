@@ -311,6 +311,7 @@ model = dict(
         global_encoder_backbone=Swin,
         global_encoder_neck=GeneralizedLSSFPN,
     ),
+    tpv_conv=dict(dim=_dim_),
     tpv_aggregator=dict(
         type='TPVAggregator_Cam_V1',
         embed_dims=_dim_,

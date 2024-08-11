@@ -593,6 +593,7 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
         ratio_logit=10.0,
         ratio_tpv_feats=2,
         ratio_tpv_relation=10,
+        tpv_conv=True,
         **kwargs,
     ):
 
@@ -610,6 +611,8 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
 
         self.normalize_loss = normalize_loss
 
+        if tpv_conv is not None:
+            self.tpv_conv = nn.Conv3d(tpv_conv.dim, tpv_conv.dim, kernel_size=1)
         # init before teacher to avoid overwriting teacher weights
         self.init_cfg = init_cfg
         self.init_weights()
@@ -752,6 +755,8 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
 
         img_voxel_feats, query_proposal, depth = self.extract_img_feat(img_inputs, img_metas)
         tpv_lists = self.tpv_transformer(img_voxel_feats)
+        if hasattr(self, 'tpv_conv'):
+            tpv_lists = [self.tpv_conv(view) for view in tpv_lists]
         x_3d = self.tpv_aggregator(tpv_lists, img_voxel_feats)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
@@ -813,6 +818,8 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
 
         img_voxel_feats, query_proposal, depth = self.extract_img_feat(img_inputs, img_metas)
         tpv_lists = self.tpv_transformer(img_voxel_feats)
+        if hasattr(self, 'tpv_conv'):
+            tpv_lists = [self.tpv_conv(view) for view in tpv_lists]
         x_3d = self.tpv_aggregator(tpv_lists, img_voxel_feats)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
@@ -844,6 +851,8 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
 
         x_lidar_tpv = self.teacher.extract_lidar_feat(points=points, grid_ind=grid_ind)
         tpv_lists = self.teacher.tpv_transformer(x_lidar_tpv, voxel_pos_grid_coarse)
+        if hasattr(self, 'tpv_conv'):
+            tpv_lists = [self.tpv_conv(view) for view in tpv_lists]
         x_3d = self.teacher.tpv_aggregator(tpv_lists)
         output = self.teacher.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
