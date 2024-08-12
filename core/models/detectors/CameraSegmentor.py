@@ -851,8 +851,8 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
 
         x_lidar_tpv = self.teacher.extract_lidar_feat(points=points, grid_ind=grid_ind)
         tpv_lists = self.teacher.tpv_transformer(x_lidar_tpv, voxel_pos_grid_coarse)
-        if hasattr(self, 'tpv_conv'):
-            tpv_lists = [self.tpv_conv(view) for view in tpv_lists]
+        if hasattr(self.teacher, 'tpv_conv'):
+            tpv_lists = [self.teacher.tpv_conv(view) for view in tpv_lists]
         x_3d = self.teacher.tpv_aggregator(tpv_lists)
         output = self.teacher.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
