@@ -593,6 +593,7 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
         ratio_logit=10.0,
         ratio_tpv_feats=2,
         ratio_tpv_relation=10,
+        ratio_tpv_weights=10,
         tpv_conv=None,
         **kwargs,
     ):
@@ -628,6 +629,7 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
             self.ratio_logit = ratio_logit
             self.ratio_tpv_feats = ratio_tpv_feats
             self.ratio_tpv_relation = ratio_tpv_relation
+            self.ratio_tpv_weights = ratio_tpv_weights
 
     def freeze_model(self, model):
         for param in model.parameters():
@@ -693,8 +695,28 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
         # pdb.set_trace()
         return x, query_proposal, depth
 
-    def save_tpv(self, tpv_cam, tpv_lidar=None):
+    def save_tpv(self, tpv_cam, tpv_lidar=None, gt_occ_1_2=None):
         tpv_list = tpv_cam
+        if gt_occ_1_2 is not None:
+            target = gt_occ_1_2.to(torch.float32)
+            target[target == 255] = 0
+
+            target_xy_mean = target.mean(dim=3)
+            mask_xy = target_xy_mean == 0
+            mask_xy = mask_xy.unsqueeze(1).unsqueeze(4).expand_as(tpv_list[0])
+
+            target_yz_mean = target.mean(dim=1)
+            mask_yz = target_yz_mean == 0
+            mask_yz = mask_yz.unsqueeze(1).unsqueeze(2).expand_as(tpv_list[1])
+
+            target_zx_mean = target.mean(dim=2)
+            mask_zx = target_zx_mean == 0
+            mask_zx = mask_zx.unsqueeze(1).unsqueeze(3).expand_as(tpv_list[2])
+
+            tpv_list[0][mask_xy] = 0
+            tpv_list[1][mask_yz] = 0
+            tpv_list[2][mask_zx] = 0
+
         # format to b,n,c,h,w
         feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
         feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
@@ -706,9 +728,28 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
 
         if tpv_lidar is not None:
             tpv_list = tpv_lidar
-            feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
-            feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
-            feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+            if gt_occ_1_2 is not None:
+                target = gt_occ_1_2.to(torch.float32)
+                target[target == 255] = 0
+
+                target_xy_mean = target.mean(dim=3)
+                mask_xy = target_xy_mean == 0
+                mask_xy = mask_xy.unsqueeze(1).unsqueeze(4).expand_as(tpv_list[0])
+
+                target_yz_mean = target.mean(dim=1)
+                mask_yz = target_yz_mean == 0
+                mask_yz = mask_yz.unsqueeze(1).unsqueeze(2).expand_as(tpv_list[1])
+
+                target_zx_mean = target.mean(dim=2)
+                mask_zx = target_zx_mean == 0
+                mask_zx = mask_zx.unsqueeze(1).unsqueeze(3).expand_as(tpv_list[2])
+
+                tpv_list[0][mask_xy] = 0
+                tpv_list[1][mask_yz] = 0
+                tpv_list[2][mask_zx] = 0
+                feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
+                feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+                feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
 
             save_feature_map_as_image(feat_xy.detach(), 'save/distill/tpv_lidar', 'xy', method='pca')
             save_feature_map_as_image(feat_yz.detach(), 'save/distill/tpv_lidar', 'yz', method='pca')
@@ -757,7 +798,7 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
         tpv_lists = self.tpv_transformer(img_voxel_feats)
         if hasattr(self, 'tpv_conv'):
             tpv_lists = [self.tpv_conv(view) for view in tpv_lists]
-        x_3d = self.tpv_aggregator(tpv_lists, img_voxel_feats)
+        x_3d, weights = self.tpv_aggregator(tpv_lists, img_voxel_feats)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
         losses = dict()
@@ -776,9 +817,9 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
         losses_distill = {}
         if hasattr(self, 'teacher'):
             with torch.no_grad():
-                tpv_lists_teacher, output_teacher = self.forward_teacher(data_dict)
+                tpv_lists_teacher, output_teacher, weights_teacher = self.forward_teacher(data_dict)
 
-            # self.save_tpv(tpv_lists, tpv_lists_teacher)
+            # self.save_tpv(tpv_lists, tpv_lists_teacher, gt_occ_1_2)
             # self.save_logits_map(output['output_voxels'], output_teacher['output_voxels'])
 
             if self.ratio_logit > 0:
@@ -796,9 +837,11 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
                                                                              self.ratio_tpv_relation)
                 losses_distill.update(losses_distill_tpv_relation)
 
-            if self.normalize_loss:
-                for key in losses_distill:
-                    losses_distill[key] = losses_distill[key] / losses_distill[key]
+            if self.ratio_tpv_weights > 0:
+                losses_distill_tpv_weights = self.distill_loss_tpv_weights(weights_teacher, weights, gt_occ_1_2,
+                                                                           self.ratio_tpv_weights)
+                losses_distill.update(losses_distill_tpv_weights)
+
             losses.update(losses_distill)
 
         pred = output['output_voxels']
@@ -820,7 +863,7 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
         tpv_lists = self.tpv_transformer(img_voxel_feats)
         if hasattr(self, 'tpv_conv'):
             tpv_lists = [self.tpv_conv(view) for view in tpv_lists]
-        x_3d = self.tpv_aggregator(tpv_lists, img_voxel_feats)
+        x_3d, _ = self.tpv_aggregator(tpv_lists, img_voxel_feats)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
         # self.save_tpv(tpv_lists)
@@ -853,10 +896,10 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
         tpv_lists = self.teacher.tpv_transformer(x_lidar_tpv, voxel_pos_grid_coarse)
         if hasattr(self.teacher, 'tpv_conv'):
             tpv_lists = [self.teacher.tpv_conv(view) for view in tpv_lists]
-        x_3d = self.teacher.tpv_aggregator(tpv_lists)
+        x_3d, weights = self.teacher.tpv_aggregator(tpv_lists)
         output = self.teacher.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
-        return tpv_lists, output
+        return tpv_lists, output, weights
 
     def calculate_cosine_similarity(self, x, y):
         # 验证形状是否一致
@@ -919,18 +962,29 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
     def distill_loss_tpv_feature(self, tpv_teacher, tpv_student, target, ratio):
         loss = 0
         for i in range(target.shape[0]):
-            # target_i = target[i].to(torch.float32)
+            target_i = target[i].to(torch.float32)
+            target_i[target_i == 255] = 0
+
             tpv_xy_teacher_i = tpv_teacher[0][i]
             tpv_xy_student_i = tpv_student[0][i]
-            loss_xy = F.l1_loss(tpv_xy_student_i, tpv_xy_teacher_i)
+            target_xy_mean_i = target_i.mean(dim=2)
+            mask = target_xy_mean_i != 0
+            mask = mask.unsqueeze(0).unsqueeze(3).expand_as(tpv_xy_student_i)
+            loss_xy = F.l1_loss(tpv_xy_student_i[mask], tpv_xy_teacher_i[mask])
 
             tpv_yz_teacher_i = tpv_teacher[1][i]
             tpv_yz_student_i = tpv_student[1][i]
-            loss_yz = F.l1_loss(tpv_yz_student_i, tpv_yz_teacher_i)
+            target_yz_mean_i = target_i.mean(dim=0)
+            mask = target_yz_mean_i != 0
+            mask = mask.unsqueeze(0).unsqueeze(1).expand_as(tpv_yz_student_i)
+            loss_yz = F.l1_loss(tpv_yz_student_i[mask], tpv_yz_teacher_i[mask])
 
             tpv_zx_teacher_i = tpv_teacher[2][i]
             tpv_zx_student_i = tpv_student[2][i]
-            loss_zx = F.l1_loss(tpv_zx_student_i, tpv_zx_teacher_i)
+            target_zx_mean_i = target_i.mean(dim=1)
+            mask = target_zx_mean_i != 0
+            mask = mask.unsqueeze(0).unsqueeze(2).expand_as(tpv_zx_student_i)
+            loss_zx = F.l1_loss(tpv_zx_student_i[mask], tpv_zx_teacher_i[mask])
 
             loss += (loss_xy + loss_yz + loss_zx) / 3
         loss = loss / target.shape[0] * ratio
@@ -961,3 +1015,20 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
             loss += (loss_xy + loss_yz + loss_zx) / 3
         loss = loss / target.shape[0] * ratio
         return dict(loss_distill_tpv_relation=loss)
+
+    def distill_loss_tpv_weights(self, weights_teacher, weights_student, target, ratio):
+        b, c, h, w, z = weights_teacher.shape
+        weights_student_softmax = F.log_softmax(weights_student, dim=1).permute(0, 2, 3, 4, 1).reshape(b, h * w * z, c)
+        weights_teacher_softmax = F.softmax(weights_teacher, dim=1).permute(0, 2, 3, 4, 1).reshape(b, h * w * z, c)
+        target = target.reshape(b, h * w * z)
+
+        loss = 0
+        for i in range(target.shape[0]):
+            valid = (target[i] != 255)
+            nonezero = (target[i] != 0)
+            mask = valid * nonezero
+            weights_student_i = weights_student_softmax[i][mask]
+            weights_teacher_i = weights_teacher_softmax[i][mask]
+            loss += nn.KLDivLoss(reduction="mean")(weights_student_i.unsqueeze(0), weights_teacher_i.unsqueeze(0))
+        loss = loss / float(target.size(0)) * ratio
+        return dict(loss_distill_weights=loss)

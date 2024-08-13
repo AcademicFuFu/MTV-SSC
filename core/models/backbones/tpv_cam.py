@@ -117,7 +117,7 @@ class TPVAggregator_Cam_V1(BaseModule):
     def forward(self, tpv_list, x3d):
         weights = self.combine_coeff(x3d)
         out_feats = self.weighted_sum(tpv_list, weights)
-        return [out_feats]
+        return [out_feats], weights
 
     def weighted_sum(self, global_feats, weights):
         out_feats = global_feats[0] * weights[:, 0:1, ...]

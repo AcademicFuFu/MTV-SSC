@@ -98,7 +98,7 @@ class LidarSegmentorPointOcc(BaseModule):
         if hasattr(self, 'tpv_conv'):
             tpv_lists = [self.tpv_conv(view) for view in tpv_lists]
 
-        x_3d = self.tpv_aggregator(tpv_lists)
+        x_3d, _ = self.tpv_aggregator(tpv_lists)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
         # self.save_tpv(tpv_lists)
@@ -131,7 +131,7 @@ class LidarSegmentorPointOcc(BaseModule):
         tpv_lists = self.tpv_transformer(x_lidar_tpv, voxel_pos_grid_coarse)
         if hasattr(self, 'tpv_conv'):
             tpv_lists = [self.tpv_conv(view) for view in tpv_lists]
-        x_3d = self.tpv_aggregator(tpv_lists)
+        x_3d, _ = self.tpv_aggregator(tpv_lists)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
         # for name, param in self.named_parameters():
