@@ -590,6 +590,7 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
         teacher=None,
         teacher_ckpt=None,
         normalize_loss=False,
+        feature_loss_type='l1',
         ratio_logit=10.0,
         ratio_tpv_feats=2,
         ratio_tpv_relation=10,
@@ -626,6 +627,7 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
                 self.teacher.load_state_dict(adjusted_ckpt)
                 print(f"Load teacher model from {teacher_ckpt}")
             self.freeze_model(self.teacher)
+            self.feature_loss_type = feature_loss_type
             self.ratio_logit = ratio_logit
             self.ratio_tpv_feats = ratio_tpv_feats
             self.ratio_tpv_relation = ratio_tpv_relation
@@ -936,28 +938,16 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
         loss = loss / float(target.size(0)) * ratio
         return dict(loss_distill_logits=loss)
 
-    # def distill_loss_tpv_feature(self, tpv_teacher, tpv_student, target, ratio):
-    #     loss = 0
-    #     for i in range(target.shape[0]):
-    #         # target_i = target[i].to(torch.float32)
-    #         tpv_xy_teacher_i = tpv_teacher[0][i]
-    #         tpv_xy_student_i = tpv_student[0][i]
-    #         cos_sim = cosine_similarity(tpv_xy_student_i, tpv_xy_teacher_i, dim=0)
-    #         loss_xy = 1 - cos_sim.mean()
-
-    #         tpv_yz_teacher_i = tpv_teacher[1][i]
-    #         tpv_yz_student_i = tpv_student[1][i]
-    #         cos_sim = cosine_similarity(tpv_yz_student_i, tpv_yz_teacher_i, dim=0)
-    #         loss_yz = 1 - cos_sim.mean()
-
-    #         tpv_zx_teacher_i = tpv_teacher[2][i]
-    #         tpv_zx_student_i = tpv_student[2][i]
-    #         cos_sim = cosine_similarity(tpv_zx_student_i, tpv_zx_teacher_i, dim=0)
-    #         loss_zx = 1 - cos_sim.mean()
-
-    #         loss += loss_xy + loss_yz + loss_zx
-    #     loss = loss * ratio / (3 * target.shape[0])
-    #     return dict(loss_distill_tpv_feature=loss)
+    def calc_feature_loss(self, feat1, feat2):
+        loss_type = self.feature_loss_type
+        if loss_type == 'l1':
+            loss = F.l1_loss(feat1, feat2)
+        elif loss_type == 'mse':
+            loss = F.mse_loss(feat1, feat2)
+        elif loss_type == 'cos_sim':
+            cos_sim = cosine_similarity(feat1, feat2, dim=0)
+            loss = 1 - cos_sim.mean()
+        return loss
 
     def distill_loss_tpv_feature(self, tpv_teacher, tpv_student, target, ratio):
         loss = 0
@@ -965,26 +955,23 @@ class CameraSegmentorEfficientSSCV2(BaseModule):
             target_i = target[i].to(torch.float32)
             target_i[target_i == 255] = 0
 
-            tpv_xy_teacher_i = tpv_teacher[0][i]
-            tpv_xy_student_i = tpv_student[0][i]
+            tpv_xy_teacher_i = tpv_teacher[0][i].squeeze()
+            tpv_xy_student_i = tpv_student[0][i].squeeze()
             target_xy_mean_i = target_i.mean(dim=2)
             mask = target_xy_mean_i != 0
-            mask = mask.unsqueeze(0).unsqueeze(3).expand_as(tpv_xy_student_i)
-            loss_xy = F.l1_loss(tpv_xy_student_i[mask], tpv_xy_teacher_i[mask])
+            loss_xy = self.calc_feature_loss(tpv_xy_student_i[:, mask], tpv_xy_teacher_i[:, mask])
 
-            tpv_yz_teacher_i = tpv_teacher[1][i]
-            tpv_yz_student_i = tpv_student[1][i]
+            tpv_yz_teacher_i = tpv_teacher[1][i].squeeze()
+            tpv_yz_student_i = tpv_student[1][i].squeeze()
             target_yz_mean_i = target_i.mean(dim=0)
             mask = target_yz_mean_i != 0
-            mask = mask.unsqueeze(0).unsqueeze(1).expand_as(tpv_yz_student_i)
-            loss_yz = F.l1_loss(tpv_yz_student_i[mask], tpv_yz_teacher_i[mask])
+            loss_yz = self.calc_feature_loss(tpv_yz_student_i[:, mask], tpv_yz_teacher_i[:, mask])
 
-            tpv_zx_teacher_i = tpv_teacher[2][i]
-            tpv_zx_student_i = tpv_student[2][i]
+            tpv_zx_teacher_i = tpv_teacher[2][i].squeeze()
+            tpv_zx_student_i = tpv_student[2][i].squeeze()
             target_zx_mean_i = target_i.mean(dim=1)
             mask = target_zx_mean_i != 0
-            mask = mask.unsqueeze(0).unsqueeze(2).expand_as(tpv_zx_student_i)
-            loss_zx = F.l1_loss(tpv_zx_student_i[mask], tpv_zx_teacher_i[mask])
+            loss_zx = self.calc_feature_loss(tpv_zx_student_i[:, mask], tpv_zx_teacher_i[:, mask])
 
             loss += (loss_xy + loss_yz + loss_zx) / 3
         loss = loss / target.shape[0] * ratio
