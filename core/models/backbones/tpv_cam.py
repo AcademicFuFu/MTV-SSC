@@ -80,7 +80,6 @@ class TPVTransformer_Cam_V0(BaseModule):
         x_3view = self.tpv_pooler(x)
         x_3view = self.global_encoder_backbone(x_3view)
 
-        pdb.set_trace()
         tpv_list = []
         for x_tpv in x_3view:
             x_tpv = self.global_encoder_neck(x_tpv)
