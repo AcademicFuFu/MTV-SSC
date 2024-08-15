@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.nn.functional import cosine_similarity
 import os
 import pdb
-from debug.utils import print_detail as pd, mem, save_feature_map_as_image, save_denormalized_images
+from debug.utils import print_detail as pd, mem, save_feature_map_as_image, save_denormalized_images, count_trainable_parameters as param
 
 
 @DETECTORS.register_module()

@@ -6,6 +6,8 @@ from mmdet3d.models import builder
 import torch.nn as nn
 import torch.nn.functional as F
 
+from debug.utils import print_detail as pd, mem, save_feature_map_as_image, count_trainable_parameters as param
+
 
 class TPVPooler(BaseModule):
 
@@ -78,12 +80,46 @@ class TPVTransformer_Cam_V0(BaseModule):
         x_3view = self.tpv_pooler(x)
         x_3view = self.global_encoder_backbone(x_3view)
 
+        pdb.set_trace()
         tpv_list = []
         for x_tpv in x_3view:
             x_tpv = self.global_encoder_neck(x_tpv)
             if not isinstance(x_tpv, torch.Tensor):
                 x_tpv = x_tpv[0]
             tpv_list.append(x_tpv)
+        tpv_list[0] = F.interpolate(tpv_list[0], size=(128, 128), mode='bilinear').unsqueeze(-1)
+        tpv_list[1] = F.interpolate(tpv_list[1], size=(128, 16), mode='bilinear').unsqueeze(2)
+        tpv_list[2] = F.interpolate(tpv_list[2], size=(128, 16), mode='bilinear').unsqueeze(3)
+
+        return tpv_list
+
+
+@BACKBONES.register_module()
+class TPVTransformer_Cam_V1(BaseModule):
+
+    def __init__(
+        self,
+        embed_dims=128,
+        split=[8, 8, 8],
+        grid_size=[128, 128, 16],
+        global_encoder_backbone=None,
+    ):
+        super().__init__()
+
+        # max pooling
+        self.tpv_pooler = TPVPooler(embed_dims=embed_dims, split=split, grid_size=grid_size)
+
+        self.global_encoder_backbone = builder.build_backbone(global_encoder_backbone)
+
+    def forward(self, x):
+        """
+        xy: [b, c, h, w, z] -> [b, c, h, w]
+        yz: [b, c, h, w, z] -> [b, c, w, z]
+        zx: [b, c, h, w, z] -> [b, c, h, z]
+        """
+        x_3view = self.tpv_pooler(x)
+        tpv_list, out_tpv_feature_lists, out_tpv_residue_lists = self.global_encoder_backbone(x_3view)
+
         tpv_list[0] = F.interpolate(tpv_list[0], size=(128, 128), mode='bilinear').unsqueeze(-1)
         tpv_list[1] = F.interpolate(tpv_list[1], size=(128, 16), mode='bilinear').unsqueeze(2)
         tpv_list[2] = F.interpolate(tpv_list[2], size=(128, 16), mode='bilinear').unsqueeze(3)

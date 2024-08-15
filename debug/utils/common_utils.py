@@ -1,5 +1,6 @@
 import os
 import torch
+import torch.nn as nn
 import importlib
 import numpy as np
 import platform
@@ -86,10 +87,8 @@ def show_vox_info(vox: np.ndarray):
 
 def adjust_data_pathes(cfg):
     if platform.node() == "komorebi-yq-ubuntu":
-        cfg.data.train[
-            'data_root'] = '/home/komorebi/workspace/researches/01_datasets/semanticKITTI'
-        cfg.data.train[
-            'preprocess_root'] = '/home/komorebi/workspace/researches/01_datasets/semanticKITTI/dataset'
+        cfg.data.train['data_root'] = '/home/komorebi/workspace/researches/01_datasets/semanticKITTI'
+        cfg.data.train['preprocess_root'] = '/home/komorebi/workspace/researches/01_datasets/semanticKITTI/dataset'
         cfg.data.train[
             'depth_gt_path'] = '/home/komorebi/workspace/researches/01_datasets/semanticKITTI/gt_renderocc/depth_gt_lidar'
         cfg.data.train[
@@ -102,21 +101,16 @@ def mem(x=None):
     if x is not None:
         if type(x) == torch.Tensor:
             print('x  : ', x.shape, x.dtype)
-            print('     ',
-                  x.element_size() * x.numel() / 1024 / 1024 / 1024, 'GB')
+            print('     ', x.element_size() * x.numel() / 1024 / 1024 / 1024, 'GB')
         else:
             print('x  : ', type(x))
             # print('     ',
             #       sum(p.element_size() * p.numel() for p in x.parameters() if p.requires_grad) / 1024 / 1024 / 1024,
             #       'GB')
-            print(
-                '     ',
-                sum(p.element_size() * p.numel()
-                    for p in x.parameters()) / 1024 / 1024 / 1024, 'GB')
+            print('     ', sum(p.element_size() * p.numel() for p in x.parameters()) / 1024 / 1024 / 1024, 'GB')
 
     print('all: ', torch.cuda.memory_allocated() / 1024 / 1024 / 1024, 'GB')
-    print('reserved: ',
-          torch.cuda.memory_reserved() / 1024 / 1024 / 1024, 'GB')
+    print('reserved: ', torch.cuda.memory_reserved() / 1024 / 1024 / 1024, 'GB')
 
 
 def vcheck(value):
@@ -131,3 +125,17 @@ def vcheck(value):
     else:
         raise ValueError('Unsupported type:', type(value))
     print(' has nan:', has_nan, ' max:', v_max, ' min:', v_min)
+
+
+def count_trainable_parameters(model: nn.Module) -> float:
+    """
+    统计模型中可训练的参数数量，并转换为MB单位
+    Args:
+        model (nn.Module): 需要统计参数量的模型
+    
+    Returns:
+        float: 模型中可训练参数的数量
+    """
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    num_params = num_params / (1000 * 1000)
+    return num_params

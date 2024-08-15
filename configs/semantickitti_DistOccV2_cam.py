@@ -159,38 +159,10 @@ _num_levels_ = 1
 _num_cams_ = 1
 voxel_out_channels = [_dim_]
 
-Swin = dict(
-    type='Swin',
-    embed_dims=96,
-    depths=[2, 2, 6, 2],
-    num_heads=[3, 6, 12, 24],
-    window_size=7,
-    mlp_ratio=4,
-    in_channels=128,
-    patch_size=4,
-    strides=[1, 2, 2, 2],
-    frozen_stages=-1,
-    qkv_bias=True,
-    qk_scale=None,
-    drop_rate=0.,
-    attn_drop_rate=0.,
-    drop_path_rate=0.2,
-    patch_norm=True,
-    out_indices=[1, 2, 3],
-    with_cp=False,
-    convert_weights=True,
-    init_cfg=dict(type='Pretrained', checkpoint='pretrain/swin_tiny_patch4_window7_224.pth'),
-)
-
-GeneralizedLSSFPN = dict(
-    type='GeneralizedLSSFPN',
-    in_channels=[192, 384, 768],
-    out_channels=_dim_,
-    start_level=0,
-    num_outs=3,
-    norm_cfg=dict(type='BN2d', requires_grad=True, track_running_stats=False),
-    act_cfg=dict(type='ReLU', inplace=True),
-    upsample_cfg=dict(mode='bilinear', align_corners=False),
+TPVUNet = dict(
+    type='TPVUNet',
+    dim=_dim_,
+    use_feature_distillation=False,
 )
 
 OccHead = dict(
@@ -304,14 +276,13 @@ model = dict(
         mlp_prior=True,
     ),
     tpv_transformer=dict(
-        type='TPVTransformer_Cam_V0',
+        type='TPVTransformer_Cam_V1',
         embed_dims=_dim_,
         split=[8, 8, 8],
         grid_size=[128, 128, 16],
-        global_encoder_backbone=Swin,
-        global_encoder_neck=GeneralizedLSSFPN,
+        # global_encoder_backbone=Swin,
+        global_encoder_backbone=TPVUNet,
     ),
-    tpv_conv=dict(dim=_dim_),
     tpv_aggregator=dict(
         type='TPVAggregator_Cam_V1',
         embed_dims=_dim_,

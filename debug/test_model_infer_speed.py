@@ -44,6 +44,7 @@ def tocuda(batch):
             for i in range(len(batch[k])):
                 if type(batch[k][i]) == torch.Tensor:
                     batch[k][i] = batch[k][i].to('cuda')
+    return batch
 
 
 def main():
@@ -64,16 +65,17 @@ def main():
     i_start = 20
     i_end = 120
     sum_t = 0
-    for i in range(i_end):
-        print(f"Batch {i}", end='')
-        batch = next(data_iter)
-        if torch.cuda.is_available():
-            bath = tocuda(batch)
-        t_start = time.time()
-        model_out = model.model.forward_test(batch)
-        t_end = time.time()
-        if i > i_start:
-            sum_t += t_end - t_start
+    with torch.no_grad():
+        for i in range(i_end):
+            print(f"Batch {i}", end='')
+            batch = next(data_iter)
+            if torch.cuda.is_available():
+                batch = tocuda(batch)
+            t_start = time.time()
+            model_out = model.model.forward_test(batch)
+            t_end = time.time()
+            if i > i_start:
+                sum_t += t_end - t_start
     print()
     print(f"Average time: {sum_t / (i_end - i_start)}")
 
