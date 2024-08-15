@@ -1,12 +1,12 @@
 lidar_ckpt = 'pretrain/distill_lidar_v1_large_with_conv.ckpt'
 
-# data_root = '/public/datasets/SemanticKITTI/dataset'
-# ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
-# stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+data_root = '/public/datasets/SemanticKITTI/dataset'
+ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
+stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
 
-data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
-stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
-ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
+# data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
+# stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
+# ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
 camera_used = ['left']
 
 dataset_type = 'SemanticKITTIDatasetLC'
@@ -253,9 +253,9 @@ model = dict(
     # ratio_tpv_feats=20,
     # ratio_tpv_relation=30,
     # ratio_tpv_weights=1,
-    feature_loss_type='cos_sim',
+    feature_loss_type='mse',
     ratio_logit=0,
-    ratio_tpv_feats=9,
+    ratio_tpv_feats=30,
     ratio_tpv_relation=0,
     ratio_tpv_weights=0,
     teacher=dict(
