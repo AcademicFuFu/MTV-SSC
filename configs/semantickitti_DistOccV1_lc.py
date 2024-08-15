@@ -1,12 +1,12 @@
 lidar_ckpt = 'pretrain/distill_lidar_v1_large_with_conv.ckpt'
 
-data_root = '/public/datasets/SemanticKITTI/dataset'
-ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
-stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+# data_root = '/public/datasets/SemanticKITTI/dataset'
+# ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
+# stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
 
-# data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
-# stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
-# ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
+data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
+stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
+ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
 camera_used = ['left']
 
 dataset_type = 'SemanticKITTIDatasetLC'
@@ -396,7 +396,7 @@ optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)
 lr_scheduler = dict(type="OneCycleLR",
                     max_lr=learning_rate,
                     total_steps=training_steps + 10,
-                    pct_start=0.05,
+                    pct_start=0.20,
                     cycle_momentum=False,
                     anneal_strategy="cos",
                     interval="step",
