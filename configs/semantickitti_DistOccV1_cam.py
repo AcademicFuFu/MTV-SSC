@@ -253,7 +253,7 @@ model = dict(
         init_cfg=None,
     ),
     VoxFormer_head=dict(
-        type='VoxFormerHead_Lite',
+        type='VoxFormerHead_Tiny',
         volume_h=128,
         volume_w=128,
         volume_z=16,
