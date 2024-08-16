@@ -1,10 +1,10 @@
-# data_root = '/public/datasets/SemanticKITTI/dataset'
-# ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
-# stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+data_root = '/public/datasets/SemanticKITTI/dataset'
+ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
+stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
 
-data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
-stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
-ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
+# data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
+# stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
+# ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
 camera_used = ['left']
 
 dataset_type = 'SemanticKITTIDataset'
@@ -157,12 +157,41 @@ _num_layers_cross_ = 3
 _num_points_cross_ = 8
 _num_levels_ = 1
 _num_cams_ = 1
+_num_bev_feats_ = 2
 voxel_out_channels = [_dim_]
 
-TPVUNet = dict(
-    type='TPVUNet',
-    dim=_dim_,
-    use_feature_distillation=False,
+Swin = dict(
+    type='Swin',
+    embed_dims=96,
+    depths=[2, 2, 6, 2],
+    num_heads=[3, 6, 12, 24],
+    window_size=7,
+    mlp_ratio=4,
+    in_channels=128,
+    patch_size=4,
+    strides=[1, 2, 2, 2],
+    frozen_stages=-1,
+    qkv_bias=True,
+    qk_scale=None,
+    drop_rate=0.,
+    attn_drop_rate=0.,
+    drop_path_rate=0.2,
+    patch_norm=True,
+    out_indices=[1, 2, 3],
+    with_cp=False,
+    convert_weights=True,
+    init_cfg=dict(type='Pretrained', checkpoint='pretrain/swin_tiny_patch4_window7_224.pth'),
+)
+
+GeneralizedLSSFPN = dict(
+    type='GeneralizedLSSFPN',
+    in_channels=[192, 384, 768],
+    out_channels=_dim_,
+    start_level=0,
+    num_outs=3,
+    norm_cfg=dict(type='BN2d', requires_grad=True, track_running_stats=False),
+    act_cfg=dict(type='ReLU', inplace=True),
+    upsample_cfg=dict(mode='bilinear', align_corners=False),
 )
 
 OccHead = dict(
@@ -184,7 +213,7 @@ OccHead = dict(
 )
 
 model = dict(
-    type='CameraSegmentorEfficientSSCV2',
+    type='CameraSegmentorEfficientSSCV3',
     img_backbone=dict(
         type='CustomEfficientNet',
         arch='b7',
@@ -275,17 +304,19 @@ model = dict(
         ),
         mlp_prior=True,
     ),
-    tpv_transformer=dict(
-        type='TPVTransformer_Cam_V1',
+    bev_transformer=dict(
+        type='BEVTransformer_Cam_V0',
         embed_dims=_dim_,
-        split=[8, 8, 8],
+        split=8,
         grid_size=[128, 128, 16],
-        # global_encoder_backbone=Swin,
-        global_encoder_backbone=TPVUNet,
+        num_feats=_num_bev_feats_,
+        global_encoder_backbone=Swin,
+        global_encoder_neck=GeneralizedLSSFPN,
     ),
-    tpv_aggregator=dict(
-        type='TPVAggregator_Cam_V1',
+    bev_aggregator=dict(
+        type='BEVAggregator_Cam_V0',
         embed_dims=_dim_,
+        num_feats=_num_bev_feats_,
     ),
     pts_bbox_head=OccHead,
 )
