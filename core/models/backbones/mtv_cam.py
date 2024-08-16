@@ -1,14 +1,11 @@
-import pdb
+from mmdet3d.models.builder import BACKBONES
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import scipy.stats as stats
-
 from mmcv.runner import BaseModule
 from mmdet3d.models import builder
-from mmdet3d.models.builder import BACKBONES
-
-from mmcv.ops import MultiScaleDeformableAttention
+import pdb
+import torch.nn as nn
+import torch.nn.functional as F
+import pdb
 
 from debug.utils import print_detail as pd, mem, save_feature_map_as_image
 
@@ -127,7 +124,7 @@ class MPVPooler(BaseModule):
 
 
 @BACKBONES.register_module()
-class MPVGlobalAggregatorV2(BaseModule):
+class MTVTransformer_Cam_V0(BaseModule):
 
     def __init__(
         self,
@@ -202,3 +199,23 @@ class MPVGlobalAggregatorV2(BaseModule):
 
         # self.save_mpv(mpv_list)
         return mpv_list
+
+
+@BACKBONES.register_module()
+class MTVAggregator_Cam_V0(BaseModule):
+
+    def __init__(self, embed_dims=128, num_views=[1, 1, 1]):
+        super().__init__()
+        self.combine_coeff = nn.Sequential(nn.Conv3d(embed_dims, sum(num_views), kernel_size=1, bias=False), nn.Softmax(dim=1))
+
+    def forward(self, mtv_list, x3d):
+        weights = self.combine_coeff(x3d)
+        out_feats = self.weighted_sum(mtv_list, weights)
+
+        return [out_feats], weights
+
+    def weighted_sum(self, global_feats, weights):
+        out_feats = global_feats[0] * weights[:, 0:1, ...]
+        for i in range(1, len(global_feats)):
+            out_feats += global_feats[i] * weights[:, i:i + 1, ...]
+        return out_feats
