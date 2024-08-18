@@ -144,7 +144,7 @@ class MTVTransformer_Cam_V0(BaseModule):
         self.global_encoder_backbone = builder.build_backbone(global_encoder_backbone)
         self.global_encoder_neck = builder.build_neck(global_encoder_neck)
 
-    def save_mpv(self, mpv_list):
+    def save_mtv(self, mpv_list):
         xy_list = [view for view in mpv_list if view.shape[-1] == 1]
         yz_list = [view for view in mpv_list if view.shape[-3] == 1]
         zx_list = [view for view in mpv_list if view.shape[-2] == 1]
@@ -197,7 +197,7 @@ class MTVTransformer_Cam_V0(BaseModule):
         for i in range(self.num_views[0] + self.num_views[1], self.num_views[0] + self.num_views[1] + self.num_views[2]):
             mpv_list[i] = F.interpolate(mpv_list[i], size=(128, 16), mode='bilinear').unsqueeze(3)
 
-        # self.save_mpv(mpv_list)
+        # self.save_mtv(mpv_list)
         return mpv_list
 
 
