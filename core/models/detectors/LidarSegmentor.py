@@ -362,9 +362,16 @@ class LidarSegmentorV0(BaseModule):
         else:
             gt_occ = None
 
-        x_3d = self.extract_lidar_feat(points=points, grid_ind=grid_ind)
-        tpv_lists = self.tpv_transformer(x_3d)
-        x_3d, _ = self.tpv_aggregator(tpv_lists, x_3d)
+        # lidar encoder
+        lidar_voxel_feats = self.extract_lidar_feat(points=points, grid_ind=grid_ind)
+
+        # mtv transformer
+        mtv_lists, mtv_weights = self.mtv_transformer(lidar_voxel_feats)
+
+        # mtv aggregator
+        x_3d, aggregator_weights = self.mtv_aggregator(mtv_lists, mtv_weights, lidar_voxel_feats)
+
+        # cls head
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
         pred = output['output_voxels']

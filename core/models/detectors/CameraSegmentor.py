@@ -1649,9 +1649,16 @@ class CameraSegmentorEfficientSSCV4(BaseModule):
         else:
             gt_occ = None
 
+        # img encoder
         img_voxel_feats, query_proposal, depth = self.extract_img_feat(img_inputs, img_metas)
-        tpv_lists = self.tpv_transformer(img_voxel_feats)
-        x_3d, _ = self.tpv_aggregator(tpv_lists, img_voxel_feats)
+
+        # mtv transformer
+        mtv_lists, mtv_weights = self.mtv_transformer(img_voxel_feats)
+
+        # mtv aggregator
+        x_3d, aggregator_weights = self.mtv_aggregator(mtv_lists, mtv_weights, img_voxel_feats)
+
+        # cls head
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
         # self.save_tpv(tpv_lists)
