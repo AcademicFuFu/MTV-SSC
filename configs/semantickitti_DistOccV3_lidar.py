@@ -260,8 +260,8 @@ model = dict(
                     conv_cfg=dict(type='Conv3d'),
                     act_cfg=dict(type='ReLU', inplace=True),
                     upsample_cfg=dict(mode='trilinear', align_corners=False)),
-    tpv_transformer=dict(
-        type='MTVTransformer_Cam_V0',
+    mtv_transformer=dict(
+        type='MTVTransformer_V0',
         embed_dims=_dim_,
         num_views=_num_views_,
         split=[8, 8, 8],
@@ -269,8 +269,8 @@ model = dict(
         global_encoder_backbone=Swin,
         global_encoder_neck=GeneralizedLSSFPN,
     ),
-    tpv_aggregator=dict(
-        type='MTVAggregator_Cam_V0',
+    mtv_aggregator=dict(
+        type='MTVAggregator_V1',
         embed_dims=_dim_,
         num_views=_num_views_,
     ),

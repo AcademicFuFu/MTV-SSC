@@ -1,10 +1,10 @@
-# data_root = '/public/datasets/SemanticKITTI/dataset'
-# ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
-# stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+data_root = '/public/datasets/SemanticKITTI/dataset'
+ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
+stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
 
-data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
-stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
-ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
+# data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
+# stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
+# ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
 camera_used = ['left']
 
 dataset_type = 'SemanticKITTIDataset'
@@ -213,7 +213,7 @@ OccHead = dict(
 )
 
 model = dict(
-    type='CameraSegmentorEfficientSSCV4',
+    type='CameraSegmentorEfficientSSCV2',
     img_backbone=dict(
         type='CustomEfficientNet',
         arch='b7',
@@ -304,8 +304,8 @@ model = dict(
         ),
         mlp_prior=True,
     ),
-    mtv_transformer=dict(
-        type='MTVTransformer_V0',
+    tpv_transformer=dict(
+        type='MTVTransformer_Cam_V0',
         embed_dims=_dim_,
         num_views=_num_views_,
         split=[8, 8, 8],
@@ -313,8 +313,9 @@ model = dict(
         global_encoder_backbone=Swin,
         global_encoder_neck=GeneralizedLSSFPN,
     ),
-    mtv_aggregator=dict(
-        type='MTVAggregator_V1',
+    tpv_conv=dict(dim=_dim_),
+    tpv_aggregator=dict(
+        type='MTVAggregator_Cam_V0',
         embed_dims=_dim_,
         num_views=_num_views_,
     ),

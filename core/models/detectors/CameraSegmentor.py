@@ -1471,12 +1471,10 @@ class CameraSegmentorEfficientSSCV4(BaseModule):
         init_cfg=None,
         teacher=None,
         teacher_ckpt=None,
-        normalize_loss=False,
         feature_loss_type='l1',
         ratio_logit=10.0,
         ratio_feats_mse=2,
         ratio_feats_relation=10,
-        tpv_conv=None,
         **kwargs,
     ):
 
@@ -1491,8 +1489,6 @@ class CameraSegmentorEfficientSSCV4(BaseModule):
         self.mtv_transformer = builder.build_backbone(mtv_transformer)
         self.mtv_aggregator = builder.build_backbone(mtv_aggregator)
         self.pts_bbox_head = builder.build_head(pts_bbox_head)
-
-        self.normalize_loss = normalize_loss
 
         # init before teacher to avoid overwriting teacher weights
         self.init_cfg = init_cfg
@@ -1586,28 +1582,32 @@ class CameraSegmentorEfficientSSCV4(BaseModule):
         gt_occ = data_dict['gt_occ']
         gt_occ_1_2 = img_metas['gt_occ_1_2']
 
+        # img encoder
         img_voxel_feats, query_proposal, depth = self.extract_img_feat(img_inputs, img_metas)
-        mtv_lists = self.mtv_transformer(img_voxel_feats)
-        x_3d, weights = self.mtv_aggregator(mtv_lists, img_voxel_feats)
+
+        # mtv transformer
+        mtv_lists, mtv_weights = self.mtv_transformer(img_voxel_feats)
+
+        # mtv aggregator
+        x_3d, aggregator_weights = self.mtv_aggregator(mtv_lists, mtv_weights, img_voxel_feats)
+
+        # cls head
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
+        # loss
         losses = dict()
-        if depth is not None:
-            losses['loss_depth'] = self.depth_net.get_depth_loss(img_inputs[-4][:, 0:1, ...], depth)
+        losses['loss_depth'] = self.depth_net.get_depth_loss(img_inputs[-4][:, 0:1, ...], depth)
         losses_occupancy = self.pts_bbox_head.loss(
             output_voxels=output['output_voxels'],
             target_voxels=gt_occ,
         )
         losses.update(losses_occupancy)
 
-        if self.normalize_loss:
-            for key in losses:
-                losses[key] = losses[key] / losses[key]
-
+        # distillation
         losses_distill = {}
         if hasattr(self, 'teacher'):
             with torch.no_grad():
-                tpv_lists_teacher, output_teacher, weights_teacher = self.forward_teacher(data_dict)
+                mtv_lists_teacher, output_teacher, aggregator_weights_teacher = self.forward_teacher(data_dict)
 
             # self.save_tpv(tpv_lists, tpv_lists_teacher, gt_occ_1_2)
             # self.save_logits_map(output['output_voxels'], output_teacher['output_voxels'])
@@ -1617,20 +1617,20 @@ class CameraSegmentorEfficientSSCV4(BaseModule):
                                                                 self.ratio_logit)
                 losses_distill.update(losses_distill_logit)
 
-            if self.ratio_tpv_feats > 0:
-                losses_distill_tpv_feature = self.distill_loss_tpv_feature(tpv_lists_teacher, tpv_lists, gt_occ_1_2,
-                                                                           self.ratio_tpv_feats)
+            if self.ratio_feats_mse > 0:
+                losses_distill_tpv_feature = self.distill_loss_tpv_feature(mtv_lists_teacher, mtv_lists, gt_occ_1_2,
+                                                                           self.ratio_feats_mse)
                 losses_distill.update(losses_distill_tpv_feature)
 
-            if self.ratio_tpv_relation > 0:
-                losses_distill_tpv_relation = self.distill_loss_tpv_relation(tpv_lists_teacher, tpv_lists, gt_occ_1_2,
-                                                                             self.ratio_tpv_relation)
+            if self.ratio_feats_relation > 0:
+                losses_distill_tpv_relation = self.distill_loss_tpv_relation(mtv_lists_teacher, mtv_lists, gt_occ_1_2,
+                                                                             self.ratio_feats_relation)
                 losses_distill.update(losses_distill_tpv_relation)
 
-            if self.ratio_tpv_weights > 0:
-                losses_distill_tpv_weights = self.distill_loss_tpv_weights(weights_teacher, weights, gt_occ_1_2,
-                                                                           self.ratio_tpv_weights)
-                losses_distill.update(losses_distill_tpv_weights)
+            # if self.ratio_tpv_weights > 0:
+            #     losses_distill_tpv_weights = self.distill_loss_tpv_weights(weights_teacher, weights, gt_occ_1_2,
+            #                                                                self.ratio_tpv_weights)
+            #     losses_distill.update(losses_distill_tpv_weights)
 
             losses.update(losses_distill)
 
@@ -1651,8 +1651,6 @@ class CameraSegmentorEfficientSSCV4(BaseModule):
 
         img_voxel_feats, query_proposal, depth = self.extract_img_feat(img_inputs, img_metas)
         tpv_lists = self.tpv_transformer(img_voxel_feats)
-        if hasattr(self, 'tpv_conv'):
-            tpv_lists = [self.tpv_conv(view) for view in tpv_lists]
         x_3d, _ = self.tpv_aggregator(tpv_lists, img_voxel_feats)
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 

@@ -274,9 +274,8 @@ class LidarSegmentorV0(BaseModule):
         lidar_tokenizer=None,
         lidar_backbone=None,
         lidar_neck=None,
-        tpv_transformer=None,
-        tpv_conv=None,
-        tpv_aggregator=None,
+        mtv_transformer=None,
+        mtv_aggregator=None,
         pts_bbox_head=None,
         **kwargs,
     ):
@@ -286,12 +285,9 @@ class LidarSegmentorV0(BaseModule):
         self.lidar_tokenizer = builder.build_backbone(lidar_tokenizer)
         self.lidar_backbone = builder.build_backbone(lidar_backbone)
         self.lidar_neck = builder.build_neck(lidar_neck)
-        self.tpv_transformer = builder.build_backbone(tpv_transformer)
-        self.tpv_aggregator = builder.build_backbone(tpv_aggregator)
+        self.mtv_transformer = builder.build_backbone(mtv_transformer)
+        self.mtv_aggregator = builder.build_backbone(mtv_aggregator)
         self.pts_bbox_head = builder.build_head(pts_bbox_head)
-
-        if tpv_conv is not None:
-            self.tpv_conv = nn.Conv3d(tpv_conv.dim, tpv_conv.dim, kernel_size=1)
 
         self.fp16_enabled = False
 
@@ -304,20 +300,6 @@ class LidarSegmentorV0(BaseModule):
         output = output[0]
 
         return output
-
-    def save_tpv(self, tpv_list):
-        # format to b,n,c,h,w
-        feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
-        feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
-        feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
-
-        save_feature_map_as_image(feat_xy.detach(), 'save/lidar/tpv', 'xy', method='pca')
-        save_feature_map_as_image(feat_yz.detach(), 'save/lidar/tpv', 'yz', method='pca')
-        save_feature_map_as_image(feat_zx.detach(), 'save/lidar/tpv', 'zx', method='pca')
-
-        # remind to comment while training
-        pdb.set_trace()
-        return
 
     def save_logits_map(self, logits):
         # format to b,n,c,h,w
@@ -345,11 +327,19 @@ class LidarSegmentorV0(BaseModule):
         img_metas = data_dict['img_metas']
         gt_occ = data_dict['gt_occ']
 
-        x_3d = self.extract_lidar_feat(points=points, grid_ind=grid_ind)
-        tpv_lists = self.tpv_transformer(x_3d)
-        x_3d, _ = self.tpv_aggregator(tpv_lists, x_3d)
+        # lidar encoder
+        lidar_voxel_feats = self.extract_lidar_feat(points=points, grid_ind=grid_ind)
+
+        # mtv transformer
+        mtv_lists, mtv_weights = self.mtv_transformer(lidar_voxel_feats)
+
+        # mtv aggregator
+        x_3d, aggregator_weights = self.mtv_aggregator(mtv_lists, mtv_weights, lidar_voxel_feats)
+
+        # cls head
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
+        # loss
         losses = dict()
         losses_occupancy = self.pts_bbox_head.loss(
             output_voxels=output['output_voxels'],
