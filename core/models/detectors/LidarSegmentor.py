@@ -331,7 +331,7 @@ class LidarSegmentorV0(BaseModule):
         lidar_voxel_feats = self.extract_lidar_feat(points=points, grid_ind=grid_ind)
 
         # mtv transformer
-        mtv_lists, mtv_weights = self.mtv_transformer(lidar_voxel_feats)
+        mtv_lists, mtv_weights, _ = self.mtv_transformer(lidar_voxel_feats)
 
         # mtv aggregator
         x_3d, aggregator_weights = self.mtv_aggregator(mtv_lists, mtv_weights, lidar_voxel_feats)
@@ -366,7 +366,7 @@ class LidarSegmentorV0(BaseModule):
         lidar_voxel_feats = self.extract_lidar_feat(points=points, grid_ind=grid_ind)
 
         # mtv transformer
-        mtv_lists, mtv_weights = self.mtv_transformer(lidar_voxel_feats)
+        mtv_lists, mtv_weights, _ = self.mtv_transformer(lidar_voxel_feats)
 
         # mtv aggregator
         x_3d, aggregator_weights = self.mtv_aggregator(mtv_lists, mtv_weights, lidar_voxel_feats)

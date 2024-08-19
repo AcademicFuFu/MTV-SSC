@@ -53,7 +53,7 @@ def print_detail_core(name, value, value_check=False):
         vcheck(value) if value_check else None
     elif isinstance(value, list):
         print(name, type(value), 'length: ', len(value))
-        if len(value) < 10:
+        if len(value) < 30:
             for i in range(len(value)):
                 print_detail_core(name + '[' + str(i) + ']', value[i])
     elif isinstance(value, tuple):

@@ -60,7 +60,7 @@ class MultiViewNormalDistWeightedPool3D(nn.Module):
         return mtv_out, weights_out
 
 
-class MPVPooler(BaseModule):
+class MTVPooler(BaseModule):
 
     def __init__(
         self,
@@ -106,24 +106,24 @@ class MPVPooler(BaseModule):
 
     def forward(self, x):
         if self.num_views[0] == 1:
-            mpv_xy = [self.mlp_xy(self.pool_xy(x).permute(0, 4, 1, 2, 3).flatten(start_dim=1, end_dim=2))]
+            mtv_xy = [self.mlp_xy(self.pool_xy(x).permute(0, 4, 1, 2, 3).flatten(start_dim=1, end_dim=2))]
             weights_xy = []
         else:
-            mpv_xy, weights_xy = self.pool_xy(x)
+            mtv_xy, weights_xy = self.pool_xy(x)
 
         if self.num_views[1] == 1:
-            mpv_yz = [self.mlp_yz(self.pool_yz(x).permute(0, 2, 1, 3, 4).flatten(start_dim=1, end_dim=2))]
+            mtv_yz = [self.mlp_yz(self.pool_yz(x).permute(0, 2, 1, 3, 4).flatten(start_dim=1, end_dim=2))]
             weights_yz = []
         else:
-            mpv_yz, weights_yz = self.pool_yz(x)
+            mtv_yz, weights_yz = self.pool_yz(x)
 
         if self.num_views[2] == 1:
-            mpv_zx = [self.mlp_zx(self.pool_zx(x).permute(0, 3, 1, 2, 4).flatten(start_dim=1, end_dim=2))]
+            mtv_zx = [self.mlp_zx(self.pool_zx(x).permute(0, 3, 1, 2, 4).flatten(start_dim=1, end_dim=2))]
             weights_zx = []
         else:
-            mpv_zx, weights_zx = self.pool_zx(x)
+            mtv_zx, weights_zx = self.pool_zx(x)
 
-        mtv_list = [mpv_xy, mpv_yz, mpv_zx]
+        mtv_list = [mtv_xy, mtv_yz, mtv_zx]
         weights_list = [weights_xy, weights_yz, weights_zx]
 
         return mtv_list, weights_list
@@ -145,15 +145,15 @@ class MTVTransformer_V0(BaseModule):
 
         # weighted pooling
         self.num_views = num_views
-        self.mpv_pooler = MPVPooler(embed_dims=embed_dims, split=split, grid_size=grid_size, num_views_xyz=num_views)
+        self.mtv_pooler = MTVPooler(embed_dims=embed_dims, split=split, grid_size=grid_size, num_views_xyz=num_views)
 
         self.global_encoder_backbone = builder.build_backbone(global_encoder_backbone)
         self.global_encoder_neck = builder.build_neck(global_encoder_neck)
 
-    def save_mtv(self, mpv_list):
-        xy_list = [view for view in mpv_list if view.shape[-1] == 1]
-        yz_list = [view for view in mpv_list if view.shape[-3] == 1]
-        zx_list = [view for view in mpv_list if view.shape[-2] == 1]
+    def save_mtv(self, mtv_list):
+        xy_list = [view for view in mtv_list if view.shape[-1] == 1]
+        yz_list = [view for view in mtv_list if view.shape[-3] == 1]
+        zx_list = [view for view in mtv_list if view.shape[-2] == 1]
 
         # format to b,n,c,h,w
         xy_list = [view.squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4) for view in xy_list]
@@ -164,12 +164,9 @@ class MTVTransformer_V0(BaseModule):
         feats_yz = torch.cat(yz_list, dim=1)
         feats_zx = torch.cat(zx_list, dim=1)
 
-        save_feature_map_as_image(feats_xy.detach(), 'save/mpv/pca', 'xy', method='pca')
-        save_feature_map_as_image(feats_yz.detach(), 'save/mpv/pca', 'yz', method='pca')
-        save_feature_map_as_image(feats_zx.detach(), 'save/mpv/pca', 'zx', method='pca')
-        # save_feature_map_as_image(feats_xy.detach(), 'save/mpv/avg', 'xy', method='average')
-        # save_feature_map_as_image(feats_yz.detach(), 'save/mpv/avg', 'yz', method='average')
-        # save_feature_map_as_image(feats_zx.detach(), 'save/mpv/avg', 'zx', method='average')
+        save_feature_map_as_image(feats_xy.detach(), 'save/mtv/pca', 'xy', method='pca')
+        save_feature_map_as_image(feats_yz.detach(), 'save/mtv/pca', 'yz', method='pca')
+        save_feature_map_as_image(feats_zx.detach(), 'save/mtv/pca', 'zx', method='pca')
 
         # remind to comment this function while training
         pdb.set_trace()
@@ -182,29 +179,35 @@ class MTVTransformer_V0(BaseModule):
         zx: [b, c, h, w, z] -> [b, c, h, z]
         """
 
-        # pdb.set_trace()
-        x_multi_view, weights = self.mpv_pooler(x)
+        x_multi_view, weights = self.mtv_pooler(x)
         x_multi_view = self.global_encoder_backbone([*x_multi_view[0], *x_multi_view[1], *x_multi_view[2]])
 
-        mpv_list = []
-        for x_mpv in x_multi_view:
-            x_mpv = self.global_encoder_neck(x_mpv)
-            if not isinstance(x_mpv, torch.Tensor):
-                x_mpv = x_mpv[0]
-            mpv_list.append(x_mpv)
+        mtv_list = []
+        neck_out = []
+        for x_mtv in x_multi_view:
+            x_mtv = self.global_encoder_neck(x_mtv)
+            neck_out.append(x_mtv)
+            if not isinstance(x_mtv, torch.Tensor):
+                x_mtv = x_mtv[0]
+            mtv_list.append(x_mtv)
+
+        feats_all = dict()
+        feats_all['feats3d'] = x
+        feats_all['mtv_backbone'] = x_multi_view
+        feats_all['mtv_neck'] = neck_out
 
         # xy
         for i in range(0, self.num_views[0]):
-            mpv_list[i] = F.interpolate(mpv_list[i], size=(128, 128), mode='bilinear').unsqueeze(-1)
+            mtv_list[i] = F.interpolate(mtv_list[i], size=(128, 128), mode='bilinear', align_corners=False).unsqueeze(-1)
         # yz
         for i in range(self.num_views[0], self.num_views[0] + self.num_views[1]):
-            mpv_list[i] = F.interpolate(mpv_list[i], size=(128, 16), mode='bilinear').unsqueeze(2)
+            mtv_list[i] = F.interpolate(mtv_list[i], size=(128, 16), mode='bilinear', align_corners=False).unsqueeze(2)
         # zx
         for i in range(self.num_views[0] + self.num_views[1], self.num_views[0] + self.num_views[1] + self.num_views[2]):
-            mpv_list[i] = F.interpolate(mpv_list[i], size=(128, 16), mode='bilinear').unsqueeze(3)
+            mtv_list[i] = F.interpolate(mtv_list[i], size=(128, 16), mode='bilinear', align_corners=False).unsqueeze(3)
 
-        # self.save_mtv(mpv_list)
-        return mpv_list, weights
+        # self.save_mtv(mtv_list)
+        return mtv_list, weights, feats_all
 
 
 @BACKBONES.register_module()

@@ -120,3 +120,26 @@ def save_feature_map_as_image(feature_map, output_dir, name='map', method='pca',
                 img_path = os.path.join(output_dir, f'feature_{name}_b{b}_n{n}_max.png')
                 plt.imsave(img_path, max_feature_np.squeeze(), cmap='gray')
                 print(f'Saved: {img_path}')
+
+
+def get_pca_feature_map(feature_map, n_components=3):
+
+    # Normalize feature map to [0, 1]
+    def normalize(tensor):
+        tensor_min = tensor.min()
+        tensor_max = tensor.max()
+        return (tensor - tensor_min) / (tensor_max - tensor_min)
+
+    B, C, H, W = feature_map.shape
+    assert B == 1, 'Batch size must be 1 for PCA visualization.'
+    feature = feature_map[0]
+    feature_flattened = feature.reshape(C, H * W).cpu().numpy().T
+    pca = PCA(n_components=n_components)
+    pca_feature = pca.fit_transform(feature_flattened)
+    pca_feature = pca_feature.T.reshape(n_components, H, W)
+    pca_feature = normalize(torch.tensor(pca_feature))
+    pca_feature_np = pca_feature.cpu().numpy().transpose(1, 2, 0)
+    pca_feature_np = np.flipud(pca_feature_np)
+    pca_feature_np = np.fliplr(pca_feature_np)
+
+    return pca_feature_np

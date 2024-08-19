@@ -11,6 +11,8 @@ dataset_type = 'SemanticKITTIDatasetLC'
 point_cloud_range = [0, -25.6, -2, 51.2, 25.6, 4.4]
 occ_size = [256, 256, 32]
 lss_downsample = [2, 2, 2]
+grid_size = [128, 128, 16]
+coarse_ratio = 2
 
 voxel_x = (point_cloud_range[3] - point_cloud_range[0]) / occ_size[0]
 voxel_y = (point_cloud_range[4] - point_cloud_range[1]) / occ_size[1]
@@ -84,11 +86,6 @@ data_config = {
     'crop_h': (0.0, 0.0),
     'resize_test': 0.00,
 }
-
-# lidar
-grid_size = [128, 128, 16]
-coarse_ratio = 2
-_num_views_ = [1, 1, 1]
 
 train_pipeline = [
     dict(type='LoadMultiViewImageFromFiles_SemanticKitti',
@@ -181,6 +178,7 @@ test_dataloader_config = dict(batch_size=1, num_workers=4)
 
 # model params #
 _dim_ = 128
+_num_views_ = [2, 1, 1]
 voxel_out_channels = [_dim_]
 
 norm_cfg = dict(type='GN', num_groups=32, requires_grad=True)
@@ -270,7 +268,7 @@ model = dict(
         global_encoder_neck=GeneralizedLSSFPN,
     ),
     mtv_aggregator=dict(
-        type='MTVAggregator_V0',
+        type='MTVAggregator_V1',
         embed_dims=_dim_,
         num_views=_num_views_,
     ),
