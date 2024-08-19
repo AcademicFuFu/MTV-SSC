@@ -88,7 +88,7 @@ data_config = {
 # lidar
 grid_size = [128, 128, 16]
 coarse_ratio = 2
-_num_views_ = [2, 1, 1]
+_num_views_ = [1, 1, 1]
 
 train_pipeline = [
     dict(type='LoadMultiViewImageFromFiles_SemanticKitti',
@@ -270,7 +270,7 @@ model = dict(
         global_encoder_neck=GeneralizedLSSFPN,
     ),
     mtv_aggregator=dict(
-        type='MTVAggregator_V1',
+        type='MTVAggregator_V0',
         embed_dims=_dim_,
         num_views=_num_views_,
     ),
