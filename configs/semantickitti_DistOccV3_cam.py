@@ -157,7 +157,7 @@ _num_layers_cross_ = 3
 _num_points_cross_ = 8
 _num_levels_ = 1
 _num_cams_ = 1
-_num_views_ = [2, 1, 1]
+_num_views_ = [1, 1, 1]
 voxel_out_channels = [_dim_]
 
 Swin = dict(
@@ -314,7 +314,7 @@ model = dict(
         global_encoder_neck=GeneralizedLSSFPN,
     ),
     mtv_aggregator=dict(
-        type='MTVAggregator_V1',
+        type='MTVAggregator_V0',
         embed_dims=_dim_,
         num_views=_num_views_,
     ),
