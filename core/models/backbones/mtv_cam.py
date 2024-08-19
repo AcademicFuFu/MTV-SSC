@@ -236,12 +236,21 @@ class MTVAggregator_V1(BaseModule):
         self.num_views = num_views
         self.grid_size = [128, 128, 16]
 
-    def forward(self, mtv_list, mtv_weights, x3d):
-        mtv_3d = self.mtv23d(mtv_list, mtv_weights)
-        weights = self.combine_coeff(x3d)
-        out_feats = self.weighted_sum(mtv_3d, weights)
+    def forward(self, mtv_list, weights_mtv_normal_dist, x3d):
+        # -----------------------------------------------
+        # weights_tpv_3d: weight for tpv 3d feature
+        # weights_mtv_normal_dist: normal distribution weight generating mtv feature
 
-        return [out_feats], weights
+        weights_tpv_3d = self.combine_coeff(x3d)
+        out_feats = self.weighted_sum(mtv_list, weights_tpv_3d, weights_mtv_normal_dist)
+        return [out_feats], weights_tpv_3d
+        # -----------------------------------------------
+
+        # mtv_3d = self.mtv23d(mtv_list, weights_mtv_normal_dist)
+        # weights = self.combine_coeff(x3d)
+        # out_feats = self.weighted_sum(mtv_3d, weights)
+
+        # return [out_feats], weights
 
     def mtv23d(self, mtv_list, mtv_weights):
         mtv_xy = mtv_list[:self.num_views[0]]
@@ -285,8 +294,33 @@ class MTVAggregator_V1(BaseModule):
                 x3d += (feat * weight).permute(0, 4, 1, 2, 3)
         return x3d
 
-    def weighted_sum(self, global_feats, weights):
-        out_feats = global_feats[0] * weights[:, 0:1, ...]
+    def weighted_sum(self, global_feats, weights_tpv_3d, weights_mtv_normal_dist):
+
+        # combine weights
+        weights = []
+        for i in range(len(weights_mtv_normal_dist)):
+            w_tpv = weights_tpv_3d[:, i:i + 1, ...]
+
+            if len(weights_mtv_normal_dist[i]) == 0:
+                weights.append(w_tpv)
+                continue
+
+            # normalize mtv weights
+            weights_mtv = torch.stack(weights_mtv_normal_dist[i], dim=1)
+            weights_mtv = weights_mtv / weights_mtv.sum(dim=1, keepdim=True)
+
+            for j in range(len(weights_mtv_normal_dist[i])):
+                # xy
+                if i == 0:
+                    w_mtv = weights_mtv[:, j].unsqueeze(0).unsqueeze(0).repeat(self.grid_size[0], self.grid_size[1], 1)
+                else:
+                    raise NotImplementedError
+
+                w_mtv = w_mtv.unsqueeze(0).unsqueeze(0).expand_as(w_tpv)
+                w = w_tpv * w_mtv
+                weights.append(w)
+
+        out_feats = global_feats[0] * weights[0]
         for i in range(1, len(global_feats)):
-            out_feats += global_feats[i] * weights[:, i:i + 1, ...]
+            out_feats += global_feats[i] * weights[i]
         return out_feats

@@ -2,7 +2,7 @@
 # ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
 # stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
 
-data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
+data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset' 
 stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
 ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
 camera_used = ['left']
@@ -157,7 +157,7 @@ _num_layers_cross_ = 3
 _num_points_cross_ = 8
 _num_levels_ = 1
 _num_cams_ = 1
-_num_views_ = [1, 1, 1]
+_num_views_ = [2, 1, 1]
 voxel_out_channels = [_dim_]
 
 Swin = dict(
@@ -314,7 +314,7 @@ model = dict(
         global_encoder_neck=GeneralizedLSSFPN,
     ),
     mtv_aggregator=dict(
-        type='MTVAggregator_V0',
+        type='MTVAggregator_V1',
         embed_dims=_dim_,
         num_views=_num_views_,
     ),
