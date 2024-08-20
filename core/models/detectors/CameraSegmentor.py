@@ -9,7 +9,7 @@ from torch.nn.functional import cosine_similarity
 import os
 import pdb
 from debug.utils import print_detail as pd, mem, count_trainable_parameters as param
-from debug.utils import save_feature_map_as_image, save_denormalized_images, get_pca_feature_map
+from debug.utils import save_feature_map_as_image, save_denormalized_images, save_all_feats, save_mtv
 
 
 @DETECTORS.register_module()
@@ -1636,8 +1636,8 @@ class CameraSegmentorEfficientSSCV4(BaseModule):
                 )
                 losses_distill.update(losses_distill_feature)
 
-            self.save_mtv(mtv_lists, mtv_lists_teacher, gt_occ_1_2)
-            self.save_all_feats(feats_student, feats_teacher, masks)
+            # save_mtv(mtv_lists, mtv_lists_teacher, self.num_views)
+            # save_all_feats(feats_student, feats_teacher, masks)
 
             # if self.ratio_tpv_weights > 0:
             #     losses_distill_tpv_weights = self.distill_loss_tpv_weights(weights_teacher, weights, gt_occ_1_2,
@@ -1894,70 +1894,6 @@ class CameraSegmentorEfficientSSCV4(BaseModule):
             loss += nn.KLDivLoss(reduction="mean")(weights_student_i.unsqueeze(0), weights_teacher_i.unsqueeze(0))
         loss = loss / float(target.size(0)) * ratio
         return dict(loss_distill_weights=loss)
-
-    def save_mtv(self, mtv_cam, mtv_lidar=None, target_1_2=None):
-        mtv_list = mtv_cam
-        if gt_occ_1_2 is not None:
-            target = gt_occ_1_2.to(torch.float32)
-            target[target == 255] = 0
-
-            target_xy_mean = target.mean(dim=3)
-            mask_xy = target_xy_mean == 0
-            mask_xy = mask_xy.unsqueeze(1).unsqueeze(4).expand_as(tpv_list[0])
-
-            target_yz_mean = target.mean(dim=1)
-            mask_yz = target_yz_mean == 0
-            mask_yz = mask_yz.unsqueeze(1).unsqueeze(2).expand_as(tpv_list[1])
-
-            target_zx_mean = target.mean(dim=2)
-            mask_zx = target_zx_mean == 0
-            mask_zx = mask_zx.unsqueeze(1).unsqueeze(3).expand_as(tpv_list[2])
-
-            tpv_list[0][mask_xy] = 0
-            tpv_list[1][mask_yz] = 0
-            tpv_list[2][mask_zx] = 0
-
-        # format to b,n,c,h,w
-        feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
-        feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
-        feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
-
-        save_feature_map_as_image(feat_xy.detach(), 'save/distill/tpv_cam', 'xy', method='pca')
-        save_feature_map_as_image(feat_yz.detach(), 'save/distill/tpv_cam', 'yz', method='pca')
-        save_feature_map_as_image(feat_zx.detach(), 'save/distill/tpv_cam', 'zx', method='pca')
-
-        if tpv_lidar is not None:
-            tpv_list = tpv_lidar
-            if gt_occ_1_2 is not None:
-                target = gt_occ_1_2.to(torch.float32)
-                target[target == 255] = 0
-
-                target_xy_mean = target.mean(dim=3)
-                mask_xy = target_xy_mean == 0
-                mask_xy = mask_xy.unsqueeze(1).unsqueeze(4).expand_as(tpv_list[0])
-
-                target_yz_mean = target.mean(dim=1)
-                mask_yz = target_yz_mean == 0
-                mask_yz = mask_yz.unsqueeze(1).unsqueeze(2).expand_as(tpv_list[1])
-
-                target_zx_mean = target.mean(dim=2)
-                mask_zx = target_zx_mean == 0
-                mask_zx = mask_zx.unsqueeze(1).unsqueeze(3).expand_as(tpv_list[2])
-
-                tpv_list[0][mask_xy] = 0
-                tpv_list[1][mask_yz] = 0
-                tpv_list[2][mask_zx] = 0
-                feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
-                feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
-                feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
-
-            save_feature_map_as_image(feat_xy.detach(), 'save/distill/tpv_lidar', 'xy', method='pca')
-            save_feature_map_as_image(feat_yz.detach(), 'save/distill/tpv_lidar', 'yz', method='pca')
-            save_feature_map_as_image(feat_zx.detach(), 'save/distill/tpv_lidar', 'zx', method='pca')
-
-        # remind to comment while training
-        pdb.set_trace()
-        return
 
     def save_logits_map(self, logits_cam, logits_lidar=None):
         # format to b,n,c,h,w

@@ -26,8 +26,7 @@ class SemanticKITTIDatasetLC(Dataset):
 
         self.load_continuous = load_continuous
         self.splits = {
-            "train": ["01"],
-            # "train": ["00", "01", "02", "03", "04", "05", "06", "07", "09", "10"],
+            "train": ["00", "01", "02", "03", "04", "05", "06", "07", "09", "10"],
             "val": ["08"],
             "test": ["08"],
             "test_submit": ["11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"],

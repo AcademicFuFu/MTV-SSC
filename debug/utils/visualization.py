@@ -143,3 +143,78 @@ def get_pca_feature_map(feature_map, n_components=3):
     pca_feature_np = np.fliplr(pca_feature_np)
 
     return pca_feature_np
+
+
+def save_all_feats(feats_student, feats_teacher, masks):
+    os.makedirs('save/distill/feats_all', exist_ok=True)
+    for i in range(1, len(feats_student)):
+        feat_student = feats_student[i]
+        feat_teacher = feats_teacher[i]
+        mask = masks[i]
+
+        feat_student = feat_student * mask
+        feat_teacher = feat_teacher * mask
+
+        b, c, h, w = feat_student.shape
+        if h > w:
+            feat_student = feat_student.permute(0, 1, 3, 2)
+            feat_teacher = feat_teacher.permute(0, 1, 3, 2)
+
+        pca_student = get_pca_feature_map(feat_student.detach())
+        pca_teacher = get_pca_feature_map(feat_teacher.detach())
+
+        map = np.zeros((pca_student.shape[0], pca_student.shape[1] * 2, pca_student.shape[2]))
+        map[:, :pca_student.shape[1], :] = pca_student
+        map[:, pca_student.shape[1]:, :] = pca_teacher
+        img_path = 'save/distill/feats_all/{}.png'.format(i)
+        plt.imsave(img_path, map)
+        print(f'Saved: {img_path}')
+    pdb.set_trace()
+
+
+def save_mtv(mtv_cam, mtv_lidar=None, num_views=[1, 1, 1]):
+    mtv_list = mtv_cam
+
+    id = 0
+    for i in range(num_views[0]):
+        # format to b,n,c,h,w
+        feat_xy = mtv_list[i].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
+        save_feature_map_as_image(feat_xy.detach(), 'save/distill/mtv_cam', 'xy_{}'.format(id), method='pca')
+        id += 1
+
+    id = 0
+    for i in range(num_views[0], num_views[0] + num_views[1]):
+        feat_yz = torch.flip(mtv_list[i].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+        save_feature_map_as_image(feat_yz.detach(), 'save/distill/mtv_cam', 'yz_{}'.format(id), method='pca')
+        id += 1
+
+    id = 0
+    for i in range(num_views[0] + num_views[1], num_views[0] + num_views[1] + num_views[2]):
+        feat_zx = torch.flip(mtv_list[i].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+        save_feature_map_as_image(feat_zx.detach(), 'save/distill/mtv_cam', 'zx_{}'.format(id), method='pca')
+        id += 1
+
+    if mtv_lidar is not None:
+        mtv_list = mtv_lidar
+        id = 0
+        for i in range(num_views[0]):
+            # format to b,n,c,h,w
+            feat_xy = mtv_list[i].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
+            save_feature_map_as_image(feat_xy.detach(), 'save/distill/mtv_lidar', 'xy_{}'.format(id), method='pca')
+            id += 1
+
+        id = 0
+        for i in range(num_views[0], num_views[0] + num_views[1]):
+            feat_yz = torch.flip(mtv_list[i].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+            save_feature_map_as_image(feat_yz.detach(), 'save/distill/mtv_lidar', 'yz_{}'.format(id), method='pca')
+            id += 1
+
+        id = 0
+        for i in range(num_views[0] + num_views[1], num_views[0] + num_views[1] + num_views[2]):
+            feat_zx = torch.flip(mtv_list[i].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+            save_feature_map_as_image(feat_zx.detach(), 'save/distill/mtv_lidar', 'zx_{}'.format(id), method='pca')
+            id += 1
+
+    # remind to comment while training
+    pdb.set_trace()
+    return
