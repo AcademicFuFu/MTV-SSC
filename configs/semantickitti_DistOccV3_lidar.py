@@ -270,7 +270,7 @@ model = dict(
         global_encoder_neck=GeneralizedLSSFPN,
     ),
     mtv_aggregator=dict(
-        type='MTVAggregator_V1',
+        type='MTVAggregator_V2',
         embed_dims=_dim_,
         num_views=_num_views_,
     ),

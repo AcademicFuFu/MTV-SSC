@@ -240,6 +240,74 @@ class MTVAggregator_V1(BaseModule):
         self.grid_size = [128, 128, 16]
 
     def forward(self, mtv_list, weights_mtv_normal_dist, x3d):
+        # weights_tpv_3d: weight for tpv 3d feature
+        # weights_mtv_normal_dist: normal distribution weight generating mtv feature
+
+        mtv_3d = self.mtv23d(mtv_list, weights_mtv_normal_dist)
+        weights = self.combine_coeff(x3d)
+        out_feats = self.weighted_sum(mtv_3d, weights)
+
+        return [out_feats], weights
+
+    def mtv23d(self, mtv_list, mtv_weights):
+        mtv_xy = mtv_list[:self.num_views[0]]
+        mtv_yz = mtv_list[self.num_views[0]:self.num_views[0] + self.num_views[1]]
+        mtv_zx = mtv_list[self.num_views[0] + self.num_views[1]:]
+
+        weights_xy, weights_yz, weights_zx = mtv_weights
+
+        mtv_3d_xy = self.to3d(mtv_xy, weights_xy, dim='xy')
+        mtv_3d_yz = self.to3d(mtv_yz, weights_yz, dim='yz')
+        mtv_3d_zx = self.to3d(mtv_zx, weights_zx, dim='zx')
+
+        return [mtv_3d_xy, mtv_3d_yz, mtv_3d_zx]
+
+    def to3d(self, feats, weights, dim):
+        channal = feats[0].shape[1]
+
+        if dim == 'xy':
+            height = self.grid_size[2]
+        elif dim == 'yz':
+            height = self.grid_size[0]
+        elif dim == 'zx':
+            height = self.grid_size[1]
+
+        if len(feats) == 1:
+            if dim == 'xy':
+                return feats[0].repeat(1, 1, 1, 1, height)
+            elif dim == 'yz':
+                return feats[0].repeat(1, 1, height, 1, 1)
+            elif dim == 'zx':
+                return feats[0].repeat(1, 1, 1, height, 1)
+
+        weights = torch.stack(weights, dim=1)
+        weights = weights / weights.sum(dim=1, keepdim=True)
+
+        if dim == 'xy':
+            x3d = torch.zeros_like(feats[0]).repeat(1, 1, 1, 1, height)
+            for i in range(len(feats)):
+                feat = feats[i].repeat(1, 1, 1, 1, height).permute(0, 2, 3, 4, 1)
+                weight = weights[:, i].unsqueeze(-1).repeat(1, channal)
+                x3d += (feat * weight).permute(0, 4, 1, 2, 3)
+        return x3d
+
+    def weighted_sum(self, global_feats, weights):
+        out_feats = global_feats[0] * weights[:, 0:1, ...]
+        for i in range(1, len(global_feats)):
+            out_feats += global_feats[i] * weights[:, i:i + 1, ...]
+        return out_feats
+
+
+@BACKBONES.register_module()
+class MTVAggregator_V2(BaseModule):
+
+    def __init__(self, embed_dims=128, num_views=[1, 1, 1]):
+        super().__init__()
+        self.combine_coeff = nn.Sequential(nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False), nn.Softmax(dim=1))
+        self.num_views = num_views
+        self.grid_size = [128, 128, 16]
+
+    def forward(self, mtv_list, weights_mtv_normal_dist, x3d):
         # -----------------------------------------------
         # weights_tpv_3d: weight for tpv 3d feature
         # weights_mtv_normal_dist: normal distribution weight generating mtv feature
