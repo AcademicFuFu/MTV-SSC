@@ -6,7 +6,6 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:3
 #SBATCH -t 4-00:00:00
-#SBATCH -o logs_v100.log                                                                                                                                                                                             
 
 srun nvidia-smi
 
