@@ -2,6 +2,7 @@
 #SBATCH -J train
 #SBATCH -p adg_2             
 #SBATCH -N 1
+#SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:4
 #SBATCH -t 4-00:00:00
