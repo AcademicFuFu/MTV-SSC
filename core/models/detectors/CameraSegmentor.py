@@ -1636,9 +1636,9 @@ class CameraSegmentorEfficientSSCV4(BaseModule):
                 )
                 losses_distill.update(losses_distill_feature)
 
-            save_mtv(mtv_lists, mtv_lists_teacher, self.num_views)
-            save_all_feats(feats_student, feats_teacher, masks)
-            save_weights(aggregator_weights, aggregator_weights_teacher)
+            # save_mtv(mtv_lists, mtv_lists_teacher, self.num_views)
+            # save_all_feats(feats_student, feats_teacher, masks)
+            # save_weights(aggregator_weights, aggregator_weights_teacher)
 
             # if self.ratio_tpv_weights > 0:
             #     losses_distill_tpv_weights = self.distill_loss_tpv_weights(weights_teacher, weights, gt_occ_1_2,
@@ -1868,8 +1868,9 @@ class CameraSegmentorEfficientSSCV4(BaseModule):
         if ration_relation > 0:
             # skip 3d feature
             for i in range(1, len(feats_student_list)):
-                feat_student = feats_student_list[i]
-                feat_teacher = feats_teacher_list[i]
+                mask = mask_list[i]
+                feat_student = feats_student_list[i] * mask
+                feat_teacher = feats_teacher_list[i] * mask
                 cos_sim_student = self.calculate_cosine_similarity(feat_student, feat_student)
                 cos_sim_teacher = self.calculate_cosine_similarity(feat_teacher, feat_teacher)
                 loss_relation = F.l1_loss(cos_sim_student, cos_sim_teacher)

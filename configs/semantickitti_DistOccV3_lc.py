@@ -1,16 +1,20 @@
-data_root = '/public/datasets/SemanticKITTI/dataset'
-ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
-stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+lidar_ckpt = 'pretrain/distill_lidar_v3_211_agg0.ckpt'
 
-# data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
-# stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
-# ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
+# data_root = '/public/datasets/SemanticKITTI/dataset'
+# ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
+# stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+
+data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
+stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
+ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
 camera_used = ['left']
 
-dataset_type = 'SemanticKITTIDataset'
+dataset_type = 'SemanticKITTIDatasetLC'
 point_cloud_range = [0, -25.6, -2, 51.2, 25.6, 4.4]
 occ_size = [256, 256, 32]
 lss_downsample = [2, 2, 2]
+grid_size = [128, 128, 16]
+coarse_ratio = 2
 
 voxel_x = (point_cloud_range[3] - point_cloud_range[0]) / occ_size[0]
 voxel_y = (point_cloud_range[4] - point_cloud_range[1]) / occ_size[1]
@@ -91,6 +95,19 @@ train_pipeline = [
          load_stereo_depth=True,
          is_train=True,
          color_jitter=(0.4, 0.4, 0.4)),
+    dict(
+        type='LoadLidarPointsFromFiles_SemanticKitti',
+        data_config=data_config,
+        is_train=True,
+    ),
+    dict(
+        type='LidarPointsPreProcess_SemanticKitti_V1',
+        data_config=data_config,
+        point_cloud_range=point_cloud_range,
+        occ_size=occ_size,
+        coarse_ratio=coarse_ratio,
+        is_train=True,
+    ),
     dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti'),
     dict(type='LoadSemKittiAnnotation',
          bda_aug_conf=bda_aug_conf,
@@ -98,7 +115,7 @@ train_pipeline = [
          is_train=True,
          point_cloud_range=point_cloud_range),
     dict(type='CollectData',
-         keys=['img_inputs', 'gt_occ'],
+         keys=['img_inputs', 'points', 'grid_ind', 'voxel_position_grid_coarse', 'gt_occ'],
          meta_keys=['pc_range', 'occ_size', 'raw_img', 'stereo_depth', 'gt_occ_1_2']),
 ]
 
@@ -121,6 +138,19 @@ test_pipeline = [
          load_stereo_depth=True,
          is_train=False,
          color_jitter=None),
+    dict(
+        type='LoadLidarPointsFromFiles_SemanticKitti',
+        data_config=data_config,
+        is_train=False,
+    ),
+    dict(
+        type='LidarPointsPreProcess_SemanticKitti_V1',
+        data_config=data_config,
+        point_cloud_range=point_cloud_range,
+        occ_size=occ_size,
+        coarse_ratio=coarse_ratio,
+        is_train=False,
+    ),
     dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti'),
     dict(type='LoadSemKittiAnnotation',
          bda_aug_conf=bda_aug_conf,
@@ -128,7 +158,7 @@ test_pipeline = [
          is_train=False,
          point_cloud_range=point_cloud_range),
     dict(type='CollectData',
-         keys=['img_inputs', 'gt_occ'],
+         keys=['img_inputs', 'points', 'grid_ind', 'voxel_position_grid_coarse', 'gt_occ'],
          meta_keys=['pc_range', 'occ_size', 'sequence', 'frame_id', 'raw_img', 'stereo_depth'])
 ]
 
@@ -160,7 +190,8 @@ _num_cams_ = 1
 _num_views_ = [2, 1, 1]
 voxel_out_channels = [_dim_]
 
-Swin = dict(
+# modules
+Swin_MTV = dict(
     type='SwinV1',
     embed_dims=96,
     depths=[2, 2, 6, 2],
@@ -183,7 +214,7 @@ Swin = dict(
     init_cfg=dict(type='Pretrained', checkpoint='pretrain/swin_tiny_patch4_window7_224.pth'),
 )
 
-GeneralizedLSSFPN = dict(
+GeneralizedLSSFPN_MTV = dict(
     type='GeneralizedLSSFPN',
     in_channels=[192, 384, 768],
     out_channels=_dim_,
@@ -211,9 +242,60 @@ OccHead = dict(
     norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
     class_frequencies=semantic_kitti_class_frequencies,
 )
-
+mtv_transformer = dict(
+    type='MTVTransformer_V0',
+    embed_dims=_dim_,
+    num_views=_num_views_,
+    split=[8, 8, 8],
+    grid_size=grid_size,
+    global_encoder_backbone=Swin_MTV,
+    global_encoder_neck=GeneralizedLSSFPN_MTV,
+)
+mtv_aggregator = dict(
+    type='MTVAggregator_V0',
+    embed_dims=_dim_,
+    num_views=_num_views_,
+)
+# model
 model = dict(
-    type='CameraSegmentorEfficientSSCV2',
+    type='CameraSegmentorEfficientSSCV4',
+    teacher_ckpt=lidar_ckpt,
+    # ratio_logit_kl=50,
+    # ratio_feats_numeric=10,
+    # ratio_feats_relation=100,
+    ratio_logit_kl=50,
+    ratio_feats_numeric=0,
+    ratio_feats_relation=0,
+    teacher=dict(
+        type='LidarSegmentorV0',
+        lidar_tokenizer=dict(
+            type='LidarEncoder',
+            grid_size=grid_size,
+            in_channels=6,
+            out_channels=128,
+            fea_compre=None,
+            base_channels=128,
+            split=[8, 8, 8],
+            track_running_stats=False,
+        ),
+        lidar_backbone=dict(type='CustomResNet3D',
+                            numC_input=128,
+                            num_layer=[2, 2, 2],
+                            num_channels=[128, 128, 128],
+                            stride=[1, 2, 2]),
+        lidar_neck=dict(type='GeneralizedLSSFPN',
+                        in_channels=[128, 128, 128],
+                        out_channels=_dim_,
+                        start_level=0,
+                        num_outs=3,
+                        norm_cfg=norm_cfg,
+                        conv_cfg=dict(type='Conv3d'),
+                        act_cfg=dict(type='ReLU', inplace=True),
+                        upsample_cfg=dict(mode='trilinear', align_corners=False)),
+        mtv_transformer=mtv_transformer,
+        mtv_aggregator=mtv_aggregator,
+        pts_bbox_head=OccHead,
+    ),
     img_backbone=dict(
         type='CustomEfficientNet',
         arch='b7',
@@ -304,22 +386,11 @@ model = dict(
         ),
         mlp_prior=True,
     ),
-    tpv_transformer=dict(
-        type='MTVTransformer_Cam_V0',
-        embed_dims=_dim_,
-        num_views=_num_views_,
-        split=[8, 8, 8],
-        grid_size=[128, 128, 16],
-        global_encoder_backbone=Swin,
-        global_encoder_neck=GeneralizedLSSFPN,
-    ),
-    tpv_conv=dict(dim=_dim_),
-    tpv_aggregator=dict(
-        type='MTVAggregator_Cam_V0',
-        embed_dims=_dim_,
-        num_views=_num_views_,
-    ),
+    mtv_transformer=mtv_transformer,
+    mtv_aggregator=mtv_aggregator,
     pts_bbox_head=OccHead,
+    num_views=_num_views_,
+    grid_size=grid_size,
 )
 """Training params."""
 learning_rate = 3e-4
