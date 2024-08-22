@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pdb
 
+from .tpv_cam import TPVPooler
 from debug.utils import print_detail as pd, mem, save_feature_map_as_image
 
 
@@ -58,6 +59,40 @@ class MultiViewNormalDistWeightedPool3D(nn.Module):
             weights_out.append(weights)
 
         return mtv_out, weights_out
+
+
+class SingleViewNormalDistWeightedPool3D(nn.Module):
+
+    def __init__(self, dim='xy'):
+        super().__init__()
+        assert dim in ['xy', 'yz', 'zx']
+
+        self.sigma = nn.Parameter(torch.ones(1), requires_grad=True)
+        self.mu = nn.Parameter(torch.ones(1) * 0.5, requires_grad=True)
+        self.dim = dim
+
+    def forward(self, x):
+        if self.dim == 'yz':
+            x = x.permute(0, 1, 3, 4, 2)
+        elif self.dim == 'zx':
+            x = x.permute(0, 1, 2, 4, 3)
+        x = x.permute(0, 2, 3, 4, 1)
+
+        device = x.device
+        b, h, w, z, c = x.shape
+        sigma = self.sigma * torch.sqrt(torch.tensor(z, device=device))
+        mu = self.mu * z
+
+        weights = torch.empty(z, dtype=torch.float32, device=device)
+        for j in range(z):
+            Z_l = normal_cdf(j, mu, sigma)
+            Z_h = normal_cdf(j + 1, mu, sigma)
+            weights[j] = Z_h - Z_l
+        # pdb.set_trace()
+        weights = weights / weights.sum()
+        out = torch.sum(x * weights.view(1, 1, 1, z, 1), dim=3).permute(0, 3, 1, 2)
+
+        return out, weights
 
 
 class MTVPooler(BaseModule):
@@ -208,6 +243,89 @@ class MTVTransformer_V0(BaseModule):
 
         # self.save_mtv(mtv_list)
         return mtv_list, weights, feats_all
+
+
+@BACKBONES.register_module()
+class MTVTransformer_V1(BaseModule):
+
+    def __init__(
+        self,
+        embed_dims=128,
+        num_views=[1, 1, 1],
+        split=[8, 8, 8],
+        grid_size=[128, 128, 16],
+        global_encoder_backbone=None,
+        global_encoder_neck=None,
+    ):
+        super().__init__()
+
+        # weighted pooling
+        self.num_views = num_views
+        for i in range(len(num_views)):
+            assert num_views[i] == 1 or num_views[i] == 2
+
+        self.tpv_pooler = TPVPooler(embed_dims=embed_dims, split=split, grid_size=grid_size)
+        if num_views[0] == 2:
+            self.pool_xy = SingleViewNormalDistWeightedPool3D(dim='xy')
+        if num_views[1] == 2:
+            self.pool_yz = SingleViewNormalDistWeightedPool3D(dim='yz')
+        if num_views[2] == 2:
+            self.pool_zx = SingleViewNormalDistWeightedPool3D(dim='zx')
+
+        self.global_encoder_backbone = builder.build_backbone(global_encoder_backbone)
+        self.global_encoder_neck = builder.build_neck(global_encoder_neck)
+
+    def forward(self, x):
+        """
+        xy: [b, c, h, w, z] -> [b, c, h, w]
+        yz: [b, c, h, w, z] -> [b, c, w, z]
+        zx: [b, c, h, w, z] -> [b, c, h, z]
+        """
+
+        x_tpv = self.tpv_pooler(x)
+
+        feats_xy = [x_tpv[0]]
+        if self.num_views[0] == 2:
+            x_xy, weights_xy = self.pool_xy(x)
+            feats_xy.append(x_xy)
+
+        feats_yz = [x_tpv[1]]
+        if self.num_views[1] == 2:
+            x_yz, weights_yz = self.pool_yz(x)
+            feats_yz.append(x_yz)
+
+        feats_zx = [x_tpv[2]]
+        if self.num_views[2] == 2:
+            x_zx, weights_zx = self.pool_zx(x)
+            feats_zx.append(x_zx)
+
+        x_multi_view = self.global_encoder_backbone([*feats_xy, *feats_yz, *feats_zx])
+
+        mtv_list = []
+        neck_out = []
+        for x_mtv in x_multi_view:
+            x_mtv = self.global_encoder_neck(x_mtv)
+            neck_out.append(x_mtv)
+            if not isinstance(x_mtv, torch.Tensor):
+                x_mtv = x_mtv[0]
+            mtv_list.append(x_mtv)
+
+        feats_all = dict()
+        feats_all['feats3d'] = x
+        feats_all['mtv_backbone'] = x_multi_view
+        feats_all['mtv_neck'] = neck_out
+
+        # xy
+        for i in range(self.num_views[0]):
+            mtv_list[i] = F.interpolate(mtv_list[i], size=(128, 128), mode='bilinear', align_corners=False).unsqueeze(-1)
+        # yz
+        for i in range(self.num_views[0], self.num_views[0] + self.num_views[1]):
+            mtv_list[i] = F.interpolate(mtv_list[i], size=(128, 16), mode='bilinear', align_corners=False).unsqueeze(2)
+        # zx
+        for i in range(self.num_views[0] + self.num_views[1], self.num_views[0] + self.num_views[1] + self.num_views[2]):
+            mtv_list[i] = F.interpolate(mtv_list[i], size=(128, 16), mode='bilinear', align_corners=False).unsqueeze(3)
+
+        return mtv_list, None, feats_all
 
 
 @BACKBONES.register_module()
