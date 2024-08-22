@@ -395,3 +395,25 @@ class MTVAggregator_V2(BaseModule):
         for i in range(1, len(global_feats)):
             out_feats += global_feats[i] * weights[i]
         return out_feats
+
+
+@BACKBONES.register_module()
+class MTVAggregator_V3(BaseModule):
+
+    def __init__(self, embed_dims=128, num_views=[1, 1, 1], grid_size=[128, 128, 16]):
+        super().__init__()
+        self.combine_coeff = nn.Sequential(nn.Conv3d(embed_dims, sum(num_views), kernel_size=1, bias=False), nn.Softmax(dim=1))
+        self.grid_size = grid_size
+        self.pos_embed = nn.Parameter(torch.randn(1, embed_dims, grid_size[0], grid_size[1], grid_size[2]), requires_grad=True)
+
+    def forward(self, mtv_list, mtv_weights, x3d):
+        weights = self.combine_coeff(x3d + self.pos_embed)
+        out_feats = self.weighted_sum(mtv_list, weights)
+
+        return [out_feats], weights
+
+    def weighted_sum(self, global_feats, weights):
+        out_feats = global_feats[0] * weights[:, 0:1, ...]
+        for i in range(1, len(global_feats)):
+            out_feats += global_feats[i] * weights[:, i:i + 1, ...]
+        return out_feats
