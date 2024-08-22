@@ -9,7 +9,7 @@ from torch.nn.functional import cosine_similarity
 import os
 import pdb
 from debug.utils import print_detail as pd, mem, count_trainable_parameters as param
-from debug.utils import save_feature_map_as_image, save_denormalized_images, save_all_feats, save_mtv
+from debug.utils import save_feature_map_as_image, save_denormalized_images, save_all_feats, save_mtv, save_weights
 
 
 @DETECTORS.register_module()
@@ -1636,8 +1636,9 @@ class CameraSegmentorEfficientSSCV4(BaseModule):
                 )
                 losses_distill.update(losses_distill_feature)
 
-            # save_mtv(mtv_lists, mtv_lists_teacher, self.num_views)
-            # save_all_feats(feats_student, feats_teacher, masks)
+            save_mtv(mtv_lists, mtv_lists_teacher, self.num_views)
+            save_all_feats(feats_student, feats_teacher, masks)
+            save_weights(aggregator_weights, aggregator_weights_teacher)
 
             # if self.ratio_tpv_weights > 0:
             #     losses_distill_tpv_weights = self.distill_loss_tpv_weights(weights_teacher, weights, gt_occ_1_2,
@@ -1895,25 +1896,450 @@ class CameraSegmentorEfficientSSCV4(BaseModule):
         loss = loss / float(target.size(0)) * ratio
         return dict(loss_distill_weights=loss)
 
-    def save_logits_map(self, logits_cam, logits_lidar=None):
-        # format to b,n,c,h,w
-        feat_xy = logits_cam.mean(dim=4).unsqueeze(1).permute(0, 1, 2, 3, 4)
-        feat_yz = torch.flip(logits_cam.mean(dim=2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
-        feat_zx = torch.flip(logits_cam.mean(dim=3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
 
-        save_feature_map_as_image(feat_xy.detach(), 'save/distill/logits_cam', 'xy', method='pca')
-        save_feature_map_as_image(feat_yz.detach(), 'save/distill/logits_cam', 'yz', method='pca')
-        save_feature_map_as_image(feat_zx.detach(), 'save/distill/logits_cam', 'zx', method='pca')
+@DETECTORS.register_module()
+class CameraSegmentorEfficientSSCV5(BaseModule):
 
-        if logits_lidar is not None:
-            feat_xy = logits_lidar.mean(dim=4).unsqueeze(1).permute(0, 1, 2, 3, 4)
-            feat_yz = torch.flip(logits_lidar.mean(dim=2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
-            feat_zx = torch.flip(logits_lidar.mean(dim=3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+    def __init__(
+        self,
+        img_backbone,
+        img_neck,
+        img_view_transformer,
+        depth_net=None,
+        proposal_layer=None,
+        VoxFormer_head=None,
+        voxel_backbone=None,
+        voxel_neck=None,
+        mtv_transformer=None,
+        mtv_aggregator=None,
+        pts_bbox_head=None,
+        init_cfg=None,
+        teacher=None,
+        teacher_ckpt=None,
+        feature_loss_type='l1',
+        ratio_logit_kl=10.0,
+        ratio_feats_numeric=2,
+        ratio_feats_relation=10,
+        num_views=[1, 1, 1],
+        grid_size=[128, 128, 16],
+        **kwargs,
+    ):
 
-            save_feature_map_as_image(feat_xy.detach(), 'save/distill/logits_lidar', 'xy', method='pca')
-            save_feature_map_as_image(feat_yz.detach(), 'save/distill/logits_lidar', 'yz', method='pca')
-            save_feature_map_as_image(feat_zx.detach(), 'save/distill/logits_lidar', 'zx', method='pca')
+        super().__init__()
 
-        # remind to comment while training
+        self.img_backbone = builder.build_backbone(img_backbone)
+        self.img_neck = builder.build_neck(img_neck)
+        self.depth_net = builder.build_neck(depth_net)
+        self.img_view_transformer = builder.build_neck(img_view_transformer)
+        self.proposal_layer = builder.build_head(proposal_layer)
+        self.VoxFormer_head = builder.build_head(VoxFormer_head)
+        self.voxel_backbone = builder.build_backbone(voxel_backbone)
+        self.voxel_neck = builder.build_neck(voxel_neck)
+        self.mtv_transformer = builder.build_backbone(mtv_transformer)
+        self.mtv_aggregator = builder.build_backbone(mtv_aggregator)
+        self.pts_bbox_head = builder.build_head(pts_bbox_head)
+        self.num_views = num_views
+        self.grid_size = grid_size
+
+        # init before teacher to avoid overwriting teacher weights
+        self.init_cfg = init_cfg
+        self.init_weights()
+
+        if teacher:
+            self.teacher = builder.build_detector(teacher).eval()
+            if os.path.exists(teacher_ckpt):
+                ckpt = torch.load(teacher_ckpt)['state_dict']
+                adjusted_ckpt = {key.replace('model.', ''): value for key, value in ckpt.items()}
+                self.teacher.load_state_dict(adjusted_ckpt)
+                print(f"Load teacher model from {teacher_ckpt}")
+            self.freeze_model(self.teacher)
+            self.feature_loss_type = feature_loss_type
+            self.ratio_logit_kl = ratio_logit_kl
+            self.ratio_feats_numeric = ratio_feats_numeric
+            self.ratio_feats_relation = ratio_feats_relation
+
+    def freeze_model(self, model):
+        for param in model.parameters():
+            param.requires_grad = False
+
+    def save_img(self, img):
+        save_denormalized_images(img.detach(), 'save/img')
         pdb.set_trace()
-        return
+
+    def image_encoder(self, img):
+        imgs = img
+        # self.save_img(img)
+
+        B, N, C, imH, imW = imgs.shape
+        imgs = imgs.view(B * N, C, imH, imW)
+
+        x = self.img_backbone(imgs)
+
+        if self.img_neck is not None:
+            x = self.img_neck(x)
+            if type(x) in [list, tuple]:
+                x = x[0]
+        _, output_dim, ouput_H, output_W = x.shape
+        x = x.view(B, N, output_dim, ouput_H, output_W)
+
+        return x
+
+    def extract_img_feat(self, img_inputs, img_metas):
+        img = img_inputs[0]
+        img_enc_feats = self.image_encoder(img)
+
+        rots, trans, intrins, post_rots, post_trans, bda = img_inputs[1:7]
+        mlp_input = self.depth_net.get_mlp_input(rots, trans, intrins, post_rots, post_trans, bda)
+
+        geo_inputs = [rots, trans, intrins, post_rots, post_trans, bda, mlp_input]
+
+        context, depth = self.depth_net([img_enc_feats] + geo_inputs, img_metas)
+        view_trans_inputs = [
+            rots[:, 0:1, ...], trans[:, 0:1, ...], intrins[:, 0:1, ...], post_rots[:, 0:1, ...], post_trans[:, 0:1, ...], bda
+        ]
+
+        lss_volume = self.img_view_transformer(context, depth, view_trans_inputs)
+
+        query_proposal = self.proposal_layer(view_trans_inputs, img_metas)
+
+        if query_proposal.shape[1] == 2:
+            proposal = torch.argmax(query_proposal, dim=1)
+        else:
+            proposal = query_proposal
+
+        if depth is not None:
+            mlvl_dpt_dists = [depth.unsqueeze(1)]
+        else:
+            mlvl_dpt_dists = None
+
+        x = self.VoxFormer_head([context],
+                                proposal,
+                                cam_params=view_trans_inputs,
+                                lss_volume=lss_volume,
+                                img_metas=img_metas,
+                                mlvl_dpt_dists=mlvl_dpt_dists)
+        x = self.voxel_backbone(x)
+        x = self.voxel_neck(x)[0]
+        # pdb.set_trace()
+        return x, query_proposal, depth
+
+    def forward(self, data_dict):
+        if self.training:
+            return self.forward_train(data_dict)
+        else:
+            return self.forward_test(data_dict)
+
+    def forward_train(self, data_dict):
+        img_inputs = data_dict['img_inputs']
+        img_metas = data_dict['img_metas']
+        gt_occ = data_dict['gt_occ']
+        gt_occ_1_2 = img_metas['gt_occ_1_2']
+
+        # img encoder
+        img_voxel_feats, query_proposal, depth = self.extract_img_feat(img_inputs, img_metas)
+
+        # mtv transformer
+        mtv_lists, mtv_weights, feats_all = self.mtv_transformer(img_voxel_feats)
+
+        # mtv aggregator
+        x_3d, aggregator_weights = self.mtv_aggregator(mtv_lists, mtv_weights, img_voxel_feats)
+
+        # cls head
+        output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
+
+        # loss
+        losses = dict()
+        losses['loss_depth'] = self.depth_net.get_depth_loss(img_inputs[-4][:, 0:1, ...], depth)
+        losses_occupancy = self.pts_bbox_head.loss(
+            output_voxels=output['output_voxels'],
+            target_voxels=gt_occ,
+        )
+        losses.update(losses_occupancy)
+
+        # distillation
+        losses_distill = {}
+        if hasattr(self, 'teacher'):
+            with torch.no_grad():
+                mtv_lists_teacher, output_teacher, aggregator_weights_teacher, feats_all_teacher = self.forward_teacher(data_dict)
+
+            # self.save_tpv(tpv_lists, tpv_lists_teacher, gt_occ_1_2)
+            # self.save_logits_map(output['output_voxels'], output_teacher['output_voxels'])
+
+            if self.ratio_logit_kl > 0:
+                losses_distill_logit = self.distill_loss_logits(
+                    logits_teacher=output_teacher['output_voxels'],
+                    logits_student=output['output_voxels'],
+                    target=gt_occ,
+                    ratio=self.ratio_logit_kl,
+                )
+                losses_distill.update(losses_distill_logit)
+
+            if self.ratio_feats_numeric > 0 or self.ratio_feats_relation > 0:
+                losses_distill_feature, feats_student, feats_teacher, masks = self.distill_loss_feature(
+                    feats_teacher=feats_all_teacher,
+                    feats_student=feats_all,
+                    target=gt_occ_1_2,
+                    ratio_numeric=self.ratio_feats_numeric,
+                    ration_relation=self.ratio_feats_relation,
+                )
+                losses_distill.update(losses_distill_feature)
+
+            save_mtv(mtv_lists, mtv_lists_teacher, self.num_views)
+            save_all_feats(feats_student, feats_teacher, masks)
+            save_weights(aggregator_weights, aggregator_weights_teacher)
+
+            # if self.ratio_tpv_weights > 0:
+            #     losses_distill_tpv_weights = self.distill_loss_tpv_weights(weights_teacher, weights, gt_occ_1_2,
+            #                                                                self.ratio_tpv_weights)
+            #     losses_distill.update(losses_distill_tpv_weights)
+
+            losses.update(losses_distill)
+
+        pred = output['output_voxels']
+        pred = torch.argmax(pred, dim=1)
+
+        train_output = {'losses': losses, 'pred': pred, 'gt_occ': gt_occ}
+        return train_output
+
+    def forward_test(self, data_dict):
+        img_inputs = data_dict['img_inputs']
+        img_metas = data_dict['img_metas']
+        gt_occ = data_dict['gt_occ']
+        if 'gt_occ' in data_dict:
+            gt_occ = data_dict['gt_occ']
+        else:
+            gt_occ = None
+
+        # img encoder
+        img_voxel_feats, query_proposal, depth = self.extract_img_feat(img_inputs, img_metas)
+
+        # mtv transformer
+        mtv_lists, mtv_weights, _ = self.mtv_transformer(img_voxel_feats)
+
+        # mtv aggregator
+        x_3d, aggregator_weights = self.mtv_aggregator(mtv_lists, mtv_weights, img_voxel_feats)
+
+        # cls head
+        output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
+
+        # self.save_tpv(tpv_lists)
+        # self.save_logits_map(output['output_voxels'])
+
+        # if hasattr(self, 'teacher'):
+        #     with torch.no_grad():
+        #         tpv_lists_teacher, output_teacher = self.forward_teacher(data_dict)
+
+        #     self.save_tpv(tpv_lists, tpv_lists_teacher)
+        #     self.save_logits_map(output['output_voxels'], output_teacher['output_voxels'])
+
+        pred = output['output_voxels']
+        pred = torch.argmax(pred, dim=1)
+
+        test_output = {'pred': pred, 'gt_occ': gt_occ}
+        return test_output
+
+    def forward_teacher(self, data_dict):
+        points = data_dict['points'][0]
+        grid_ind = data_dict['grid_ind'][0]
+        img_metas = data_dict['img_metas']
+        if 'gt_occ' in data_dict:
+            gt_occ = data_dict['gt_occ']
+        else:
+            gt_occ = None
+
+        # lidar encoder
+        lidar_voxel_feats = self.teacher.extract_lidar_feat(points=points, grid_ind=grid_ind)
+
+        # mtv transformer
+        mtv_lists, mtv_weights, feats_all = self.teacher.mtv_transformer(lidar_voxel_feats)
+
+        # mtv aggregator
+        x_3d, aggregator_weights = self.teacher.mtv_aggregator(mtv_lists, mtv_weights, lidar_voxel_feats)
+
+        # cls head
+        output = self.teacher.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
+
+        return mtv_lists, output, aggregator_weights, feats_all
+
+    def calculate_cosine_similarity(self, x, y):
+        assert x.shape == y.shape, "输入特征的形状必须相同"
+        B, C, H, W = x.shape
+
+        # (B, C, H, W) -> (B, C, H * W)
+        x_flat = x.reshape(B, C, -1)
+        y_flat = y.reshape(B, C, -1)
+
+        # normalize
+        x_norm = F.normalize(x_flat, p=2, dim=1)
+        y_norm = F.normalize(y_flat, p=2, dim=1)
+
+        # bmm
+        cosine_similarity_flat = torch.bmm(x_norm.permute(0, 2, 1), y_norm)
+
+        return cosine_similarity_flat
+
+    def distill_loss_logits(self, logits_teacher, logits_student, target, ratio):
+        b, c, h, w, z = logits_teacher.shape
+        logits_student_softmax = F.log_softmax(logits_student, dim=1).permute(0, 2, 3, 4, 1).reshape(b, h * w * z, c)
+        logits_teacher_softmax = F.softmax(logits_teacher, dim=1).permute(0, 2, 3, 4, 1).reshape(b, h * w * z, c)
+        target = target.reshape(b, h * w * z)
+
+        loss = 0
+        for i in range(target.shape[0]):
+            valid = (target[i] != 255)
+            nonezero = (target[i] != 0)
+            mask = valid * nonezero
+            logits_student_i = logits_student_softmax[i][mask]
+            logits_teacher_i = logits_teacher_softmax[i][mask]
+            loss += nn.KLDivLoss(reduction="mean")(logits_student_i.unsqueeze(0), logits_teacher_i.unsqueeze(0))
+        loss = loss / float(target.size(0)) * ratio
+        return dict(loss_distill_logits=loss)
+
+    def distill_loss_feature(self, feats_teacher, feats_student, target, ratio_numeric, ration_relation):
+        feats_teacher_list = []
+        feats_student_list = []
+        mask_list = []
+
+        target = target.to(torch.float32)
+        target[target == 255] = 0
+
+        # feats 3d
+        mask = (target != 0).unsqueeze(1).expand_as(feats_student['feats3d'])
+        feats_student_list.append(feats_student['feats3d'])
+        feats_teacher_list.append(feats_teacher['feats3d'])
+        mask_list.append(mask)
+
+        # feats 2d
+        target_xy_mean = target.mean(dim=3)
+        mask_xy = target_xy_mean != 0
+        size_xy = (self.grid_size[0], self.grid_size[1])
+        target_yz_mean = target.mean(dim=1)
+        mask_yz = target_yz_mean != 0
+        size_yz = (self.grid_size[1], self.grid_size[2])
+        target_zx_mean = target.mean(dim=2)
+        mask_zx = target_zx_mean != 0
+        size_zx = (self.grid_size[0], self.grid_size[2])
+
+        # mtv
+        feats_backbone_teacher = feats_teacher['mtv_backbone']
+        feats_backbone_student = feats_student['mtv_backbone']
+        feats_neck_teacher = feats_teacher['mtv_neck']
+        feats_neck_student = feats_student['mtv_neck']
+
+        # xy plane
+        for i in range(self.num_views[0]):
+            for j in range(len(feats_backbone_teacher[i])):
+                feat_student = feats_backbone_student[i][j]
+                feat_teacher = feats_backbone_teacher[i][j]
+                feat_student = F.interpolate(feat_student, size=size_xy, mode='bilinear', align_corners=False)
+                feat_teacher = F.interpolate(feat_teacher, size=size_xy, mode='bilinear', align_corners=False)
+                mask = mask_xy.unsqueeze(1).expand_as(feat_student)
+
+                feats_student_list.append(feat_student)
+                feats_teacher_list.append(feat_teacher)
+                mask_list.append(mask)
+
+            for j in range(len(feats_neck_teacher[i])):
+                feat_student = feats_neck_student[i][j]
+                feat_teacher = feats_neck_teacher[i][j]
+                feat_student = F.interpolate(feat_student, size=size_xy, mode='bilinear', align_corners=False)
+                feat_teacher = F.interpolate(feat_teacher, size=size_xy, mode='bilinear', align_corners=False)
+                mask = mask_xy.unsqueeze(1).expand_as(feat_student)
+
+                feats_student_list.append(feat_student)
+                feats_teacher_list.append(feat_teacher)
+                mask_list.append(mask)
+
+        # yz plane
+        for i in range(self.num_views[0], self.num_views[0] + self.num_views[1]):
+            for j in range(len(feats_backbone_teacher[i])):
+                feat_student = feats_backbone_student[i][j]
+                feat_teacher = feats_backbone_teacher[i][j]
+                feat_student = F.interpolate(feat_student, size=size_yz, mode='bilinear', align_corners=False)
+                feat_teacher = F.interpolate(feat_teacher, size=size_yz, mode='bilinear', align_corners=False)
+                mask = mask_yz.unsqueeze(1).expand_as(feat_student)
+
+                feats_student_list.append(feat_student)
+                feats_teacher_list.append(feat_teacher)
+                mask_list.append(mask)
+
+            for j in range(len(feats_neck_teacher[i])):
+                feat_student = feats_neck_student[i][j]
+                feat_teacher = feats_neck_teacher[i][j]
+                feat_student = F.interpolate(feat_student, size=size_yz, mode='bilinear', align_corners=False)
+                feat_teacher = F.interpolate(feat_teacher, size=size_yz, mode='bilinear', align_corners=False)
+                mask = mask_yz.unsqueeze(1).expand_as(feat_student)
+
+                feats_student_list.append(feat_student)
+                feats_teacher_list.append(feat_teacher)
+                mask_list.append(mask)
+
+        # zx plane
+        for i in range(self.num_views[0] + self.num_views[1], self.num_views[0] + self.num_views[1] + self.num_views[2]):
+            for j in range(len(feats_backbone_teacher[i])):
+                feat_student = feats_backbone_student[i][j]
+                feat_teacher = feats_backbone_teacher[i][j]
+                feat_student = F.interpolate(feat_student, size=size_zx, mode='bilinear', align_corners=False)
+                feat_teacher = F.interpolate(feat_teacher, size=size_zx, mode='bilinear', align_corners=False)
+                mask = mask_zx.unsqueeze(1).expand_as(feat_student)
+
+                feats_student_list.append(feat_student)
+                feats_teacher_list.append(feat_teacher)
+                mask_list.append(mask)
+
+            for j in range(len(feats_neck_teacher[i])):
+                feat_student = feats_neck_student[i][j]
+                feat_teacher = feats_neck_teacher[i][j]
+                feat_student = F.interpolate(feat_student, size=size_zx, mode='bilinear', align_corners=False)
+                feat_teacher = F.interpolate(feat_teacher, size=size_zx, mode='bilinear', align_corners=False)
+                mask = mask_zx.unsqueeze(1).expand_as(feat_student)
+
+                feats_student_list.append(feat_student)
+                feats_teacher_list.append(feat_teacher)
+                mask_list.append(mask)
+
+        losses_feature = {}
+
+        # numeric loss
+        if ratio_numeric > 0:
+            loss_numeric = 0
+            for i in range(len(mask_list)):
+                mask = mask_list[i]
+                feat_student = feats_student_list[i][mask]
+                feat_teacher = feats_teacher_list[i][mask]
+                loss = (F.l1_loss(feat_student, feat_teacher) + F.mse_loss(feat_student, feat_teacher)) / 2
+                loss_numeric += loss
+            loss_numeric = loss_numeric / len(mask_list) * ratio_numeric
+            losses_feature.update(dict(loss_distill_feature_numeric=loss_numeric))
+
+        # relation loss
+        if ration_relation > 0:
+            # skip 3d feature
+            for i in range(1, len(feats_student_list)):
+                feat_student = feats_student_list[i]
+                feat_teacher = feats_teacher_list[i]
+                cos_sim_student = self.calculate_cosine_similarity(feat_student, feat_student)
+                cos_sim_teacher = self.calculate_cosine_similarity(feat_teacher, feat_teacher)
+                loss_relation = F.l1_loss(cos_sim_student, cos_sim_teacher)
+                loss_relation += loss_relation
+            loss_relation = loss_relation / len(feats_student_list) * ration_relation
+            losses_feature.update(dict(loss_distill_feature_relation=loss_relation))
+
+        return losses_feature, feats_student_list, feats_teacher_list, mask_list
+
+    def distill_loss_tpv_weights(self, weights_teacher, weights_student, target, ratio):
+        b, c, h, w, z = weights_teacher.shape
+        weights_student_softmax = F.log_softmax(weights_student, dim=1).permute(0, 2, 3, 4, 1).reshape(b, h * w * z, c)
+        weights_teacher_softmax = F.softmax(weights_teacher, dim=1).permute(0, 2, 3, 4, 1).reshape(b, h * w * z, c)
+        target = target.reshape(b, h * w * z)
+
+        loss = 0
+        for i in range(target.shape[0]):
+            valid = (target[i] != 255)
+            nonezero = (target[i] != 0)
+            mask = valid * nonezero
+            weights_student_i = weights_student_softmax[i][mask]
+            weights_teacher_i = weights_teacher_softmax[i][mask]
+            loss += nn.KLDivLoss(reduction="mean")(weights_student_i.unsqueeze(0), weights_teacher_i.unsqueeze(0))
+        loss = loss / float(target.size(0)) * ratio
+        return dict(loss_distill_weights=loss)

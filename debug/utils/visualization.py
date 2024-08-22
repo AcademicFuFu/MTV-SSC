@@ -5,6 +5,8 @@ import os
 from sklearn.decomposition import PCA
 import pdb
 
+from debug.utils import print_detail as pd, mem, count_trainable_parameters as param
+
 
 def denormalize(image, mean, std):
     """
@@ -216,5 +218,69 @@ def save_mtv(mtv_cam, mtv_lidar=None, num_views=[1, 1, 1]):
             id += 1
 
     # remind to comment while training
+    pdb.set_trace()
+    return
+
+
+def save_logits_map(logits_cam, logits_lidar=None):
+    # format to b,n,c,h,w
+    feat_xy = logits_cam.mean(dim=4).unsqueeze(1).permute(0, 1, 2, 3, 4)
+    feat_yz = torch.flip(logits_cam.mean(dim=2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+    feat_zx = torch.flip(logits_cam.mean(dim=3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+
+    save_feature_map_as_image(feat_xy.detach(), 'save/distill/logits_cam', 'xy', method='pca')
+    save_feature_map_as_image(feat_yz.detach(), 'save/distill/logits_cam', 'yz', method='pca')
+    save_feature_map_as_image(feat_zx.detach(), 'save/distill/logits_cam', 'zx', method='pca')
+
+    if logits_lidar is not None:
+        feat_xy = logits_lidar.mean(dim=4).unsqueeze(1).permute(0, 1, 2, 3, 4)
+        feat_yz = torch.flip(logits_lidar.mean(dim=2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+        feat_zx = torch.flip(logits_lidar.mean(dim=3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+
+        save_feature_map_as_image(feat_xy.detach(), 'save/distill/logits_lidar', 'xy', method='pca')
+        save_feature_map_as_image(feat_yz.detach(), 'save/distill/logits_lidar', 'yz', method='pca')
+        save_feature_map_as_image(feat_zx.detach(), 'save/distill/logits_lidar', 'zx', method='pca')
+
+    # remind to comment while training
+    pdb.set_trace()
+    return
+
+
+def save_weights(weights_cam, weights_lidar=None):
+    os.makedirs('save/distill/weights', exist_ok=True)
+
+    weights_cam_xy = weights_cam.mean(dim=4).squeeze(0).permute(1, 2, 0)
+    if weights_lidar is not None:
+        weights_lidar_xy = weights_lidar.mean(dim=4).squeeze(0).permute(1, 2, 0)
+        weights = torch.cat([weights_cam_xy, weights_lidar_xy], dim=1)
+    else:
+        weights = weights_cam_xy
+    weights = np.fliplr(np.flipud(weights.detach().cpu().numpy()))
+    img_path = 'save/distill/weights/weights_xy.png'
+    plt.imsave(img_path, weights)
+    print(f'Saved: {img_path}')
+
+    weights_cam_yz = torch.flip(weights_cam.mean(dim=2).squeeze(0).permute(2, 1, 0), dims=[-1])
+    if weights_lidar is not None:
+        weights_lidar_yz = torch.flip(weights_lidar.mean(dim=2).squeeze(0).permute(2, 1, 0), dims=[-1])
+        weights = torch.cat([weights_cam_yz, weights_lidar_yz], dim=1)
+    else:
+        weights = weights_cam_yz
+    weights = np.fliplr(np.flipud(weights.detach().cpu().numpy()))
+    img_path = 'save/distill/weights/weights_yz.png'
+    plt.imsave(img_path, weights)
+    print(f'Saved: {img_path}')
+
+    weights_cam_zx = torch.flip(weights_cam.mean(dim=3).squeeze(0).permute(2, 1, 0), dims=[-1])
+    if weights_lidar is not None:
+        weights_lidar_zx = torch.flip(weights_lidar.mean(dim=3).squeeze(0).permute(2, 1, 0), dims=[-1])
+        weights = torch.cat([weights_cam_zx, weights_lidar_zx], dim=1)
+    else:
+        weights = weights_cam_zx
+    weights = np.fliplr(np.flipud(weights.detach().cpu().numpy()))
+    img_path = 'save/distill/weights/weights_zx.png'
+    plt.imsave(img_path, weights)
+    print(f'Saved: {img_path}')
+
     pdb.set_trace()
     return
