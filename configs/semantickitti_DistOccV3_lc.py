@@ -234,7 +234,7 @@ OccHead = dict(
     with_cp=True,
     occ_size=occ_size,
     loss_weight_cfg={
-        "loss_voxel_ce_weight": 1.0,
+        "loss_voxel_ce_weight": 3.0,
         "loss_voxel_sem_scal_weight": 1.0,
         "loss_voxel_geo_scal_weight": 1.0
     },
@@ -263,9 +263,9 @@ model = dict(
     # ratio_logit_kl=50,
     # ratio_feats_numeric=10,
     # ratio_feats_relation=100,
-    ratio_logit_kl=50,
-    ratio_feats_numeric=0,
-    ratio_feats_relation=0,
+    ratio_logit_kl=25,
+    ratio_feats_numeric=3,
+    ratio_feats_relation=50,
     teacher=dict(
         type='LidarSegmentorV0',
         lidar_tokenizer=dict(
@@ -401,7 +401,7 @@ optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)
 lr_scheduler = dict(type="OneCycleLR",
                     max_lr=learning_rate,
                     total_steps=training_steps + 10,
-                    pct_start=0.05,
+                    pct_start=0.1,
                     cycle_momentum=False,
                     anneal_strategy="cos",
                     interval="step",
