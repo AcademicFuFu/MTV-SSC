@@ -157,7 +157,7 @@ _num_layers_cross_ = 3
 _num_points_cross_ = 8
 _num_levels_ = 1
 _num_cams_ = 1
-_num_views_ = [2, 1, 2]
+_num_views_ = [1, 1, 1]
 voxel_out_channels = [_dim_]
 
 Swin = dict(
@@ -305,7 +305,7 @@ model = dict(
         mlp_prior=True,
     ),
     mtv_transformer=dict(
-        type='MTVTransformer_V1',
+        type='MTVTransformer_V2',
         embed_dims=_dim_,
         num_views=_num_views_,
         split=[8, 8, 8],

@@ -1,10 +1,10 @@
-data_root = '/public/datasets/SemanticKITTI/dataset'
-ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
-stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+# data_root = '/public/datasets/SemanticKITTI/dataset'
+# ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
+# stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
 
-# data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
-# stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
-# ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
+data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
+stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
+ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
 camera_used = ['left']
 
 dataset_type = 'SemanticKITTIDatasetLC'
@@ -88,7 +88,7 @@ data_config = {
 # lidar
 grid_size = [128, 128, 16]
 coarse_ratio = 2
-_num_views_ = [2, 1, 1]
+_num_views_ = [1, 1, 1]
 
 train_pipeline = [
     dict(type='LoadMultiViewImageFromFiles_SemanticKitti',
@@ -261,7 +261,7 @@ model = dict(
                     act_cfg=dict(type='ReLU', inplace=True),
                     upsample_cfg=dict(mode='trilinear', align_corners=False)),
     mtv_transformer=dict(
-        type='MTVTransformer_V0',
+        type='MTVTransformer_V2',
         embed_dims=_dim_,
         num_views=_num_views_,
         split=[8, 8, 8],
@@ -270,7 +270,7 @@ model = dict(
         global_encoder_neck=GeneralizedLSSFPN,
     ),
     mtv_aggregator=dict(
-        type='MTVAggregator_V1',
+        type='MTVAggregator_V0',
         embed_dims=_dim_,
         num_views=_num_views_,
     ),
