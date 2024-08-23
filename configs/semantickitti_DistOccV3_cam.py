@@ -305,7 +305,7 @@ model = dict(
         mlp_prior=True,
     ),
     mtv_transformer=dict(
-        type='MTVTransformer_V2',
+        type='MTVTransformer_V3',
         embed_dims=_dim_,
         num_views=_num_views_,
         split=[8, 8, 8],

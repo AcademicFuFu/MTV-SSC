@@ -9,6 +9,15 @@ import torch.nn.functional as F
 from debug.utils import print_detail as pd, mem, save_feature_map_as_image, count_trainable_parameters as param
 
 
+class WeightedAvgPool3D(nn.Module):
+
+    def __init__(self):
+        super(WeightedAvgPool3D, self).__init__()
+
+    def forward(self, x, weights):
+        return torch.sum(x * weights, dim=1)
+
+
 class TPVPooler(BaseModule):
 
     def __init__(
@@ -43,6 +52,45 @@ class TPVPooler(BaseModule):
                                     nn.Conv2d(out_channels[1], out_channels[1], kernel_size=1, stride=1))
 
     def forward(self, x):
+        tpv_xy = self.mlp_xy(self.pool_xy(x).permute(0, 4, 1, 2, 3).flatten(start_dim=1, end_dim=2))
+        tpv_yz = self.mlp_yz(self.pool_yz(x).permute(0, 2, 1, 3, 4).flatten(start_dim=1, end_dim=2))
+        tpv_zx = self.mlp_zx(self.pool_zx(x).permute(0, 3, 1, 2, 4).flatten(start_dim=1, end_dim=2))
+
+        tpv_list = [tpv_xy, tpv_yz, tpv_zx]
+
+        return tpv_list
+
+
+class TPVPoolerV1(BaseModule):
+
+    def __init__(
+        self,
+        embed_dims=128,
+        split=[8, 8, 8],
+        grid_size=[128, 128, 16],
+    ):
+        super().__init__()
+        self.weights_conv = nn.Sequential(nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False), nn.Softmax(dim=1))
+        self.pool_xy = WeightedAvgPool3D(dim='xy')
+
+        self.pool_yz = WeightedAvgPool3D(dim='yz')
+
+        self.pool_zx = WeightedAvgPool3D(dim='zx')
+
+        in_channels = embed_dims
+        out_channels = embed_dims
+
+        self.mlp_xy = nn.Sequential(nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1), nn.ReLU(),
+                                    nn.Conv2d(out_channels, out_channels, kernel_size=1, stride=1))
+
+        self.mlp_yz = nn.Sequential(nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1), nn.ReLU(),
+                                    nn.Conv2d(out_channels, out_channels, kernel_size=1, stride=1))
+
+        self.mlp_zx = nn.Sequential(nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1), nn.ReLU(),
+                                    nn.Conv2d(out_channels, out_channels, kernel_size=1, stride=1))
+
+    def forward(self, x):
+        pdb.set_trace()
         tpv_xy = self.mlp_xy(self.pool_xy(x).permute(0, 4, 1, 2, 3).flatten(start_dim=1, end_dim=2))
         tpv_yz = self.mlp_yz(self.pool_yz(x).permute(0, 2, 1, 3, 4).flatten(start_dim=1, end_dim=2))
         tpv_zx = self.mlp_zx(self.pool_zx(x).permute(0, 3, 1, 2, 4).flatten(start_dim=1, end_dim=2))
