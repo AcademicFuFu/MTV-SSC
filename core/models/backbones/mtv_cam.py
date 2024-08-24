@@ -443,20 +443,72 @@ class MTVTransformer_V3(BaseModule):
         """
 
         x_tpv = self.tpv_pooler(x)
+        x_tpv_ = self.tpv_pooler_(x)
+        for i in range(len(x_tpv)):
+            x_tpv[i] = x_tpv[i] + x_tpv_[i]
 
-        x_xy, weights_xy = self.pool_xy(x)
-        x_xy = self.mlp_xy(x_xy)
-        feats_xy = x_tpv[0] + x_xy
+        x_multi_view = self.global_encoder_backbone(x_tpv)
 
-        x_yz, weights_yz = self.pool_yz(x)
-        x_yz = self.mlp_yz(x_yz)
-        feats_yz = x_tpv[1] + x_yz
+        mtv_list = []
+        neck_out = []
+        for x_mtv in x_multi_view:
+            x_mtv = self.global_encoder_neck(x_mtv)
+            neck_out.append(x_mtv)
+            if not isinstance(x_mtv, torch.Tensor):
+                x_mtv = x_mtv[0]
+            mtv_list.append(x_mtv)
 
-        x_zx, weights_zx = self.pool_zx(x)
-        x_zx = self.mlp_zx(x_zx)
-        feats_zx = x_tpv[2] + x_zx
+        feats_all = dict()
+        feats_all['feats3d'] = x
+        feats_all['mtv_backbone'] = x_multi_view
+        feats_all['mtv_neck'] = neck_out
 
-        x_multi_view = self.global_encoder_backbone([feats_xy, feats_yz, feats_zx])
+        # xy
+        for i in range(self.num_views[0]):
+            mtv_list[i] = F.interpolate(mtv_list[i], size=(128, 128), mode='bilinear', align_corners=False).unsqueeze(-1)
+        # yz
+        for i in range(self.num_views[0], self.num_views[0] + self.num_views[1]):
+            mtv_list[i] = F.interpolate(mtv_list[i], size=(128, 16), mode='bilinear', align_corners=False).unsqueeze(2)
+        # zx
+        for i in range(self.num_views[0] + self.num_views[1], self.num_views[0] + self.num_views[1] + self.num_views[2]):
+            mtv_list[i] = F.interpolate(mtv_list[i], size=(128, 16), mode='bilinear', align_corners=False).unsqueeze(3)
+
+        return mtv_list, None, feats_all
+
+
+@BACKBONES.register_module()
+class MTVTransformer_V4(BaseModule):
+
+    def __init__(
+        self,
+        embed_dims=128,
+        num_views=[1, 1, 1],
+        split=[8, 8, 8],
+        grid_size=[128, 128, 16],
+        global_encoder_backbone=None,
+        global_encoder_neck=None,
+    ):
+        super().__init__()
+
+        # weighted pooling
+        self.num_views = num_views
+        for i in range(len(num_views)):
+            assert num_views[i] == 1
+
+        self.tpv_pooler = TPVPoolerV1(embed_dims=embed_dims, split=split, grid_size=grid_size)
+        self.global_encoder_backbone = builder.build_backbone(global_encoder_backbone)
+        self.global_encoder_neck = builder.build_neck(global_encoder_neck)
+
+    def forward(self, x):
+        """
+        xy: [b, c, h, w, z] -> [b, c, h, w]
+        yz: [b, c, h, w, z] -> [b, c, w, z]
+        zx: [b, c, h, w, z] -> [b, c, h, z]
+        """
+
+        x_tpv = self.tpv_pooler(x)
+
+        x_multi_view = self.global_encoder_backbone(x_tpv)
 
         mtv_list = []
         neck_out = []

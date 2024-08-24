@@ -255,7 +255,7 @@ model = dict(
     ),
     voxel_backbone=dict(type='CustomResNet3D',
                         numC_input=128,
-                        num_layer=[2, 2, 2],
+                        num_layer=[1, 1, 1],
                         num_channels=[128, 128, 128],
                         stride=[1, 2, 2]),
     voxel_neck=dict(type='GeneralizedLSSFPN',
@@ -319,7 +319,7 @@ model = dict(
         mlp_prior=True,
     ),
     mtv_transformer=dict(
-        type='MTVTransformer_V0',
+        type='MTVTransformer_V3',
         embed_dims=_dim_,
         num_views=_num_views_,
         split=[8, 8, 8],

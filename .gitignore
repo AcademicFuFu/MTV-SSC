@@ -140,3 +140,4 @@ logs
 pred
 weights
 *.out
+*.tar.gz

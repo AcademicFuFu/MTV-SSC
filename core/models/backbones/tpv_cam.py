@@ -11,11 +11,25 @@ from debug.utils import print_detail as pd, mem, save_feature_map_as_image, coun
 
 class WeightedAvgPool3D(nn.Module):
 
-    def __init__(self):
+    def __init__(self, dim):
         super(WeightedAvgPool3D, self).__init__()
+        self.dim = dim
 
     def forward(self, x, weights):
-        return torch.sum(x * weights, dim=1)
+        # x : b, c, h, w, z
+        # weights : b, 3, h, w, z
+
+        if self.dim == 'xy':
+            weight = F.softmax(weights[:, 0:1, :, :, :], dim=-1)
+            feat = (x * weight).sum(dim=-1)
+        elif self.dim == 'yz':
+            weight = F.softmax(weights[:, 1:2, :, :, :], dim=-3)
+            feat = (x * weight).sum(dim=-3)
+        elif self.dim == 'zx':
+            weight = F.softmax(weights[:, 2:3, :, :, :], dim=-2)
+            feat = (x * weight).sum(dim=-2)
+
+        return feat
 
 
 class TPVPooler(BaseModule):
@@ -70,7 +84,7 @@ class TPVPoolerV1(BaseModule):
         grid_size=[128, 128, 16],
     ):
         super().__init__()
-        self.weights_conv = nn.Sequential(nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False), nn.Softmax(dim=1))
+        self.weights_conv = nn.Sequential(nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False))
         self.pool_xy = WeightedAvgPool3D(dim='xy')
 
         self.pool_yz = WeightedAvgPool3D(dim='yz')
@@ -90,10 +104,10 @@ class TPVPoolerV1(BaseModule):
                                     nn.Conv2d(out_channels, out_channels, kernel_size=1, stride=1))
 
     def forward(self, x):
-        pdb.set_trace()
-        tpv_xy = self.mlp_xy(self.pool_xy(x).permute(0, 4, 1, 2, 3).flatten(start_dim=1, end_dim=2))
-        tpv_yz = self.mlp_yz(self.pool_yz(x).permute(0, 2, 1, 3, 4).flatten(start_dim=1, end_dim=2))
-        tpv_zx = self.mlp_zx(self.pool_zx(x).permute(0, 3, 1, 2, 4).flatten(start_dim=1, end_dim=2))
+        weights = self.weights_conv(x)
+        tpv_xy = self.mlp_xy(self.pool_xy(x, weights))
+        tpv_yz = self.mlp_yz(self.pool_yz(x, weights))
+        tpv_zx = self.mlp_zx(self.pool_zx(x, weights))
 
         tpv_list = [tpv_xy, tpv_yz, tpv_zx]
 
