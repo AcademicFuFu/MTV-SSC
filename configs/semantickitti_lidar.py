@@ -283,13 +283,14 @@ training_steps = 25000
 
 optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)
 
-lr_scheduler = dict(type="OneCycleLR",
-                    max_lr=learning_rate,
-                    total_steps=training_steps + 10,
-                    pct_start=0.05,
-                    cycle_momentum=False,
-                    anneal_strategy="cos",
-                    interval="step",
-                    frequency=1)
+lr_scheduler = dict(type="ConstantLR", factor=1.0, total_iters=25, interval="epoch", frequency=1)
+# lr_scheduler = dict(type="OneCycleLR",
+#                     max_lr=learning_rate,
+#                     total_steps=training_steps + 10,
+#                     pct_start=0.05,
+#                     cycle_momentum=False,
+#                     anneal_strategy="cos",
+#                     interval="step",
+#                     frequency=1)
 
 load_from = './pretrain/pretrain_geodepth.pth'
