@@ -158,8 +158,8 @@ class TPVGenerator(BaseModule):
 
         feats_all = dict()
         feats_all['feats3d'] = x
-        feats_all['mtv_backbone'] = x_tpv
-        feats_all['mtv_neck'] = neck_out
+        feats_all['tpv_backbone'] = x_tpv
+        feats_all['tpv_neck'] = neck_out
 
         # xy
         tpv_list[0] = F.interpolate(tpv_list[0], size=(128, 128), mode='bilinear', align_corners=False).unsqueeze(-1)

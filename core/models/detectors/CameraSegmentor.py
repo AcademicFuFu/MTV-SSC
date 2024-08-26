@@ -33,6 +33,7 @@ class CameraSegmentor(BaseModule):
         ratio_logit_kl=10.0,
         ratio_feats_numeric=2,
         ratio_feats_relation=10,
+        ratio_aggregator_weights=10,
         grid_size=[128, 128, 16],
         **kwargs,
     ):
@@ -71,6 +72,7 @@ class CameraSegmentor(BaseModule):
             self.ratio_logit_kl = ratio_logit_kl
             self.ratio_feats_numeric = ratio_feats_numeric
             self.ratio_feats_relation = ratio_feats_relation
+            self.ratio_aggregator_weights = ratio_aggregator_weights
 
     def freeze_model(self, model):
         for param in model.parameters():
@@ -197,10 +199,14 @@ class CameraSegmentor(BaseModule):
             # save_all_feats(feats_student, feats_teacher, masks)
             # save_weights(aggregator_weights, aggregator_weights_teacher)
 
-            # if self.ratio_tpv_weights > 0:
-            #     losses_distill_tpv_weights = self.distill_loss_tpv_weights(weights_teacher, weights, gt_occ_1_2,
-            #                                                                self.ratio_tpv_weights)
-            #     losses_distill.update(losses_distill_tpv_weights)
+            if self.ratio_aggregator_weights > 0:
+                losses_distill_aggregator_weights = self.distill_loss_aggregator_weights(
+                    aggregator_weights_teacher,
+                    aggregator_weights,
+                    gt_occ_1_2,
+                    self.ratio_aggregator_weights,
+                )
+                losses_distill.update(losses_distill_aggregator_weights)
 
             losses.update(losses_distill)
 
@@ -230,9 +236,6 @@ class CameraSegmentor(BaseModule):
 
         # cls head
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
-
-        # self.save_tpv(tpv_lists)
-        # self.save_logits_map(output['output_voxels'])
 
         # if hasattr(self, 'teacher'):
         #     with torch.no_grad():
@@ -330,10 +333,10 @@ class CameraSegmentor(BaseModule):
         size_zx = (self.grid_size[0], self.grid_size[2])
 
         # mtv
-        feats_backbone_teacher = feats_teacher['mtv_backbone']
-        feats_backbone_student = feats_student['mtv_backbone']
-        feats_neck_teacher = feats_teacher['mtv_neck']
-        feats_neck_student = feats_student['mtv_neck']
+        feats_backbone_teacher = feats_teacher['tpv_backbone']
+        feats_backbone_student = feats_student['tpv_backbone']
+        feats_neck_teacher = feats_teacher['tpv_neck']
+        feats_neck_student = feats_student['tpv_neck']
 
         # xy plane
         for i in range(1):
@@ -416,7 +419,7 @@ class CameraSegmentor(BaseModule):
                 mask = mask_list[i]
                 feat_student = feats_student_list[i][mask]
                 feat_teacher = feats_teacher_list[i][mask]
-                loss = (F.l1_loss(feat_student, feat_teacher) + F.mse_loss(feat_student, feat_teacher)) / 2
+                loss = 3 * F.l1_loss(feat_student, feat_teacher) + F.mse_loss(feat_student, feat_teacher)
                 loss_numeric += loss
             loss_numeric = loss_numeric / len(mask_list) * ratio_numeric
             losses_feature.update(dict(loss_distill_feature_numeric=loss_numeric))
@@ -436,7 +439,7 @@ class CameraSegmentor(BaseModule):
 
         return losses_feature, feats_student_list, feats_teacher_list, mask_list
 
-    def distill_loss_tpv_weights(self, weights_teacher, weights_student, target, ratio):
+    def distill_loss_aggregator_weights(self, weights_teacher, weights_student, target, ratio):
         b, c, h, w, z = weights_teacher.shape
         weights_student_softmax = F.log_softmax(weights_student, dim=1).permute(0, 2, 3, 4, 1).reshape(b, h * w * z, c)
         weights_teacher_softmax = F.softmax(weights_teacher, dim=1).permute(0, 2, 3, 4, 1).reshape(b, h * w * z, c)
