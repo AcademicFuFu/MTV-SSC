@@ -51,6 +51,29 @@ class TPVMaxPooler(BaseModule):
         return tpv_list
 
 
+# class WeightedAvgPool3D(nn.Module):
+
+#     def __init__(self, dim, split, grid_size):
+#         super(WeightedAvgPool3D, self).__init__()
+#         self.dim = dim
+#         self.split = split
+#         self.grid_size = grid_size
+
+#     def forward(self, x, weights):
+#         # x : b, c, h, w, z
+#         # weights : b, 3, h, w, z
+#         if self.dim == 'xy':
+#             weight = F.softmax(weights[:, 0:1, :, :, :], dim=-1)
+#             feat = (x * weight).sum(dim=-1)
+#         elif self.dim == 'yz':
+#             weight = F.softmax(weights[:, 1:2, :, :, :], dim=-3)
+#             feat = (x * weight).sum(dim=-3)
+#         elif self.dim == 'zx':
+#             weight = F.softmax(weights[:, 2:3, :, :, :], dim=-2)
+#             feat = (x * weight).sum(dim=-2)
+
+#         return feat
+
 class WeightedAvgPool3D(nn.Module):
 
     def __init__(self, dim, split, grid_size):
@@ -62,17 +85,20 @@ class WeightedAvgPool3D(nn.Module):
     def forward(self, x, weights):
         # x : b, c, h, w, z
         # weights : b, 3, h, w, z
-        pdb.set_trace()
 
+        b, c, h, w, z = x.size()
         if self.dim == 'xy':
-            weight = F.softmax(weights[:, 0:1, :, :, :], dim=-1)
-            feat = (x * weight).sum(dim=-1)
+            weight = weights[:, 0:1, :, :, :].reshape(b, 1, h, w, self.split[2], z // self.split[2]).softmax(dim=-1)
+            x = x.reshape(b, c, h, w, self.split[2], z // self.split[2])
+            feat = (x * weight).sum(dim=-1).permute(0,1,4,2,3).flatten(start_dim=1, end_dim=2)
         elif self.dim == 'yz':
-            weight = F.softmax(weights[:, 1:2, :, :, :], dim=-3)
-            feat = (x * weight).sum(dim=-3)
+            weight = weights[:, 1:2, :, :, :].reshape(b, 1, self.split[0], h // self.split[0], w, z).softmax(dim=-3)
+            x = x.reshape(b, c, self.split[0], h // self.split[0], w, z)
+            feat = (x * weight).sum(dim=-3).permute(0,1,2,3,4).flatten(start_dim=1, end_dim=2)
         elif self.dim == 'zx':
-            weight = F.softmax(weights[:, 2:3, :, :, :], dim=-2)
-            feat = (x * weight).sum(dim=-2)
+            weight = weights[:, 2:3, :, :, :].reshape(b, 1, h, self.split[1], w // self.split[1], z).softmax(dim=-2)
+            x = x.reshape(b, c, h, self.split[1], w // self.split[1], z)
+            feat = (x * weight).sum(dim=-2).permute(0,1,3,2,4).flatten(start_dim=1, end_dim=2)
 
         return feat
 
@@ -87,23 +113,26 @@ class TPVWeightedAvgPooler(BaseModule):
     ):
         super().__init__()
         self.weights_conv = nn.Sequential(nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False))
-        self.pool_xy = WeightedAvgPool3D(dim='xy')
+        self.pool_xy = WeightedAvgPool3D(dim='xy', split=split, grid_size=grid_size)
 
-        self.pool_yz = WeightedAvgPool3D(dim='yz')
+        self.pool_yz = WeightedAvgPool3D(dim='yz', split=split, grid_size=grid_size)
 
-        self.pool_zx = WeightedAvgPool3D(dim='zx')
+        self.pool_zx = WeightedAvgPool3D(dim='zx', split=split, grid_size=grid_size)
 
-        in_channels = embed_dims
-        out_channels = embed_dims
+        in_channels = [int(embed_dims * s) for s in split]
+        out_channels = [int(embed_dims) for s in split]
 
-        self.mlp_xy = nn.Sequential(nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1), nn.ReLU(),
-                                    nn.Conv2d(out_channels, out_channels, kernel_size=1, stride=1))
+        # in_channels = [embed_dims for _ in split]
+        # out_channels = [embed_dims for _ in split]
 
-        self.mlp_yz = nn.Sequential(nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1), nn.ReLU(),
-                                    nn.Conv2d(out_channels, out_channels, kernel_size=1, stride=1))
+        self.mlp_xy = nn.Sequential(nn.Conv2d(in_channels[2], out_channels[2], kernel_size=1, stride=1), nn.ReLU(),
+                                    nn.Conv2d(out_channels[2], out_channels[2], kernel_size=1, stride=1))
 
-        self.mlp_zx = nn.Sequential(nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1), nn.ReLU(),
-                                    nn.Conv2d(out_channels, out_channels, kernel_size=1, stride=1))
+        self.mlp_yz = nn.Sequential(nn.Conv2d(in_channels[0], out_channels[0], kernel_size=1, stride=1), nn.ReLU(),
+                                    nn.Conv2d(out_channels[0], out_channels[0], kernel_size=1, stride=1))
+
+        self.mlp_zx = nn.Sequential(nn.Conv2d(in_channels[1], out_channels[1], kernel_size=1, stride=1), nn.ReLU(),
+                                    nn.Conv2d(out_channels[1], out_channels[1], kernel_size=1, stride=1))
 
     def forward(self, x):
         weights = self.weights_conv(x)
@@ -179,6 +208,7 @@ class TPVAggregator(BaseModule):
 
     def __init__(self, embed_dims=128, num_views=[1, 1, 1]):
         super().__init__()
+        # self.combine_coeff = nn.Sequential(nn.Conv3d(embed_dims, sum(num_views), kernel_size=1, bias=False))
         self.combine_coeff = nn.Conv3d(embed_dims, sum(num_views), kernel_size=1, bias=False)
 
     def forward(self, tpv_list, x3d):

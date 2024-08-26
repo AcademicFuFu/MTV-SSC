@@ -202,7 +202,7 @@ OccHead = dict(
     with_cp=True,
     occ_size=occ_size,
     loss_weight_cfg={
-        "loss_voxel_ce_weight": 3.0,
+        "loss_voxel_ce_weight": 1.0,
         "loss_voxel_sem_scal_weight": 1.0,
         "loss_voxel_geo_scal_weight": 1.0
     },
