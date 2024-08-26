@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -248,6 +249,9 @@ def save_logits_map(logits_cam, logits_lidar=None):
 
 def save_weights(weights_cam, weights_lidar=None):
     os.makedirs('save/distill/weights', exist_ok=True)
+    weights_cam = F.softmax(weights_cam, dim=1)
+    if weights_lidar is not None:
+        weights_lidar = F.softmax(weights_lidar, dim=1)
 
     weights_cam_xy = weights_cam.mean(dim=4).squeeze(0).permute(1, 2, 0)
     if weights_lidar is not None:

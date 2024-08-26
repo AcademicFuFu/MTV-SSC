@@ -53,13 +53,16 @@ class TPVMaxPooler(BaseModule):
 
 class WeightedAvgPool3D(nn.Module):
 
-    def __init__(self, dim):
+    def __init__(self, dim, split, grid_size):
         super(WeightedAvgPool3D, self).__init__()
         self.dim = dim
+        self.split = split
+        self.grid_size = grid_size
 
     def forward(self, x, weights):
         # x : b, c, h, w, z
         # weights : b, 3, h, w, z
+        pdb.set_trace()
 
         if self.dim == 'xy':
             weight = F.softmax(weights[:, 0:1, :, :, :], dim=-1)
@@ -176,11 +179,11 @@ class TPVAggregator(BaseModule):
 
     def __init__(self, embed_dims=128, num_views=[1, 1, 1]):
         super().__init__()
-        self.combine_coeff = nn.Sequential(nn.Conv3d(embed_dims, sum(num_views), kernel_size=1, bias=False), nn.Softmax(dim=1))
+        self.combine_coeff = nn.Conv3d(embed_dims, sum(num_views), kernel_size=1, bias=False)
 
     def forward(self, tpv_list, x3d):
         weights = self.combine_coeff(x3d)
-        out_feats = self.weighted_sum(tpv_list, weights)
+        out_feats = self.weighted_sum(tpv_list, F.softmax(weights, dim=1))
 
         return [out_feats], weights
 
