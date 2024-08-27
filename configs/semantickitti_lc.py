@@ -1,4 +1,4 @@
-lidar_ckpt = 'pretrain/lidar_2300.ckpt'
+lidar_ckpt = 'pretrain/lidar_2373.ckpt'
 
 # data_root = '/public/datasets/SemanticKITTI/dataset'
 # ann_file = '/public/datasets/SemanticKITTI/dataset/labels'

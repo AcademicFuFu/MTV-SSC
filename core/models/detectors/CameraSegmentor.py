@@ -157,6 +157,7 @@ class CameraSegmentor(BaseModule):
 
         # tpv aggregator
         x_3d, aggregator_weights = self.tpv_aggregator(tpv_list, img_voxel_feats)
+        feats_all['feats3d_aggregator'] = x_3d[0]
 
         # cls head
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
@@ -267,6 +268,7 @@ class CameraSegmentor(BaseModule):
 
         # mtv aggregator
         x_3d, aggregator_weights = self.teacher.tpv_aggregator(mtv_lists, lidar_voxel_feats)
+        feats_all['feats3d_aggregator'] = x_3d[0]
 
         # cls head
         output = self.teacher.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
@@ -319,6 +321,10 @@ class CameraSegmentor(BaseModule):
         mask = (target != 0).unsqueeze(1).expand_as(feats_student['feats3d'])
         feats_student_list.append(feats_student['feats3d'])
         feats_teacher_list.append(feats_teacher['feats3d'])
+        mask_list.append(mask)
+
+        feats_student_list.append(feats_student['feats3d_aggregator'])
+        feats_teacher_list.append(feats_teacher['feats3d_aggregator'])
         mask_list.append(mask)
 
         # feats 2d
