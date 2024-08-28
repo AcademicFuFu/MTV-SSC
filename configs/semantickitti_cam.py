@@ -216,6 +216,7 @@ tpv_generator = dict(
     embed_dims=_dim_,
     split=[8, 8, 8],
     grid_size=[128, 128, 16],
+    pool_type='global',
     global_encoder_backbone=Swin,
     global_encoder_neck=GeneralizedLSSFPN,
 )

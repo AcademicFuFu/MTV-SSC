@@ -51,10 +51,10 @@ class TPVMaxPooler(BaseModule):
         return tpv_list
 
 
-class WeightedAvgPool3D(nn.Module):
+class GlobalWeightedAvgPool3D(nn.Module):
 
     def __init__(self, dim, split, grid_size):
-        super(WeightedAvgPool3D, self).__init__()
+        super(GlobalWeightedAvgPool3D, self).__init__()
         self.dim = dim
         self.split = split
         self.grid_size = grid_size
@@ -75,33 +75,33 @@ class WeightedAvgPool3D(nn.Module):
         return feat
 
 
-# class WeightedAvgPool3D(nn.Module):
+class LocalWeightedAvgPool3D(nn.Module):
 
-#     def __init__(self, dim, split, grid_size):
-#         super(WeightedAvgPool3D, self).__init__()
-#         self.dim = dim
-#         self.split = split
-#         self.grid_size = grid_size
+    def __init__(self, dim, split, grid_size):
+        super(LocalWeightedAvgPool3D, self).__init__()
+        self.dim = dim
+        self.split = split
+        self.grid_size = grid_size
 
-#     def forward(self, x, weights):
-#         # x : b, c, h, w, z
-#         # weights : b, 3, h, w, z
+    def forward(self, x, weights):
+        # x : b, c, h, w, z
+        # weights : b, 3, h, w, z
 
-#         b, c, h, w, z = x.size()
-#         if self.dim == 'xy':
-#             weight = weights[:, 0:1, :, :, :].reshape(b, 1, h, w, self.split[2], z // self.split[2]).softmax(dim=-1)
-#             x = x.reshape(b, c, h, w, self.split[2], z // self.split[2])
-#             feat = (x * weight).sum(dim=-1).permute(0, 1, 4, 2, 3).flatten(start_dim=1, end_dim=2)
-#         elif self.dim == 'yz':
-#             weight = weights[:, 1:2, :, :, :].reshape(b, 1, self.split[0], h // self.split[0], w, z).softmax(dim=-3)
-#             x = x.reshape(b, c, self.split[0], h // self.split[0], w, z)
-#             feat = (x * weight).sum(dim=-3).permute(0, 1, 2, 3, 4).flatten(start_dim=1, end_dim=2)
-#         elif self.dim == 'zx':
-#             weight = weights[:, 2:3, :, :, :].reshape(b, 1, h, self.split[1], w // self.split[1], z).softmax(dim=-2)
-#             x = x.reshape(b, c, h, self.split[1], w // self.split[1], z)
-#             feat = (x * weight).sum(dim=-2).permute(0, 1, 3, 2, 4).flatten(start_dim=1, end_dim=2)
+        b, c, h, w, z = x.size()
+        if self.dim == 'xy':
+            weight = weights[:, 0:1, :, :, :].reshape(b, 1, h, w, self.split[2], z // self.split[2]).softmax(dim=-1)
+            x = x.reshape(b, c, h, w, self.split[2], z // self.split[2])
+            feat = (x * weight).sum(dim=-1).permute(0, 1, 4, 2, 3).flatten(start_dim=1, end_dim=2)
+        elif self.dim == 'yz':
+            weight = weights[:, 1:2, :, :, :].reshape(b, 1, self.split[0], h // self.split[0], w, z).softmax(dim=-3)
+            x = x.reshape(b, c, self.split[0], h // self.split[0], w, z)
+            feat = (x * weight).sum(dim=-3).permute(0, 1, 2, 3, 4).flatten(start_dim=1, end_dim=2)
+        elif self.dim == 'zx':
+            weight = weights[:, 2:3, :, :, :].reshape(b, 1, h, self.split[1], w // self.split[1], z).softmax(dim=-2)
+            x = x.reshape(b, c, h, self.split[1], w // self.split[1], z)
+            feat = (x * weight).sum(dim=-2).permute(0, 1, 3, 2, 4).flatten(start_dim=1, end_dim=2)
 
-#         return feat
+        return feat
 
 
 class TPVWeightedAvgPooler(BaseModule):
@@ -111,20 +111,23 @@ class TPVWeightedAvgPooler(BaseModule):
         embed_dims=128,
         split=[8, 8, 8],
         grid_size=[128, 128, 16],
+        pool_type='global',
     ):
         super().__init__()
         self.weights_conv = nn.Sequential(nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False))
-        self.pool_xy = WeightedAvgPool3D(dim='xy', split=split, grid_size=grid_size)
+        if pool_type == 'global':
+            self.pool_xy = GlobalWeightedAvgPool3D(dim='xy', split=split, grid_size=grid_size)
+            self.pool_yz = GlobalWeightedAvgPool3D(dim='yz', split=split, grid_size=grid_size)
+            self.pool_zx = GlobalWeightedAvgPool3D(dim='zx', split=split, grid_size=grid_size)
+            in_channels = [embed_dims for _ in split]
+            out_channels = [embed_dims for _ in split]
 
-        self.pool_yz = WeightedAvgPool3D(dim='yz', split=split, grid_size=grid_size)
-
-        self.pool_zx = WeightedAvgPool3D(dim='zx', split=split, grid_size=grid_size)
-
-        # in_channels = [int(embed_dims * s) for s in split]
-        # out_channels = [int(embed_dims) for s in split]
-
-        in_channels = [embed_dims for _ in split]
-        out_channels = [embed_dims for _ in split]
+        elif pool_type == 'local':
+            self.pool_xy = LocalWeightedAvgPool3D(dim='xy', split=split, grid_size=grid_size)
+            self.pool_yz = LocalWeightedAvgPool3D(dim='yz', split=split, grid_size=grid_size)
+            self.pool_zx = LocalWeightedAvgPool3D(dim='zx', split=split, grid_size=grid_size)
+            in_channels = [int(embed_dims * s) for s in split]
+            out_channels = [int(embed_dims) for s in split]
 
         self.mlp_xy = nn.Sequential(nn.Conv2d(in_channels[2], out_channels[2], kernel_size=1, stride=1), nn.ReLU(),
                                     nn.Conv2d(out_channels[2], out_channels[2], kernel_size=1, stride=1))
@@ -155,6 +158,7 @@ class TPVGenerator(BaseModule):
         split=[8, 8, 8],
         grid_size=[128, 128, 16],
         pooler='avg',
+        pool_type='global',
         global_encoder_backbone=None,
         global_encoder_neck=None,
     ):
@@ -162,7 +166,7 @@ class TPVGenerator(BaseModule):
 
         # pooling
         if pooler == 'avg':
-            self.tpv_pooler = TPVWeightedAvgPooler(embed_dims=embed_dims, split=split, grid_size=grid_size)
+            self.tpv_pooler = TPVWeightedAvgPooler(embed_dims=embed_dims, split=split, grid_size=grid_size, pool_type=pool_type)
         elif pooler == 'max':
             self.tpv_pooler = TPVMaxPooler(embed_dims=embed_dims, split=split, grid_size=grid_size)
 
