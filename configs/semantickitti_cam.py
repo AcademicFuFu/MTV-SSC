@@ -222,7 +222,7 @@ tpv_generator = dict(
 )
 
 tpv_aggregator = dict(
-    type='TPVAggregator',
+    type='TPVAggregatorV3',
     embed_dims=_dim_,
 )
 

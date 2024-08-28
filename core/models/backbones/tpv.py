@@ -279,3 +279,29 @@ class TPVAggregatorV2(BaseModule):
         for i in range(1, len(global_feats)):
             out_feats += global_feats[i] * weights[:, i:i + 1, ...]
         return out_feats
+
+
+@BACKBONES.register_module()
+class TPVAggregatorV3(BaseModule):
+
+    def __init__(
+        self,
+        embed_dims=128,
+    ):
+        super().__init__()
+        self.combine_coeff = nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False)
+
+    def forward(self, tpv_list, x3d):
+        b, c, h, w, z = x3d.size()
+        weights = torch.ones([b, 3, h, w, z], device=x3d.device)
+        x3d_ = self.weighted_sum(tpv_list, weights)
+        weights = self.combine_coeff(x3d_)
+        out_feats = self.weighted_sum(tpv_list, F.softmax(weights, dim=1))
+
+        return [out_feats], weights
+
+    def weighted_sum(self, global_feats, weights):
+        out_feats = global_feats[0] * weights[:, 0:1, ...]
+        for i in range(1, len(global_feats)):
+            out_feats += global_feats[i] * weights[:, i:i + 1, ...]
+        return out_feats
