@@ -202,7 +202,7 @@ OccHead = dict(
     with_cp=True,
     occ_size=occ_size,
     loss_weight_cfg={
-        "loss_voxel_ce_weight": 1.0,
+        "loss_voxel_ce_weight": 3.0,
         "loss_voxel_sem_scal_weight": 1.0,
         "loss_voxel_geo_scal_weight": 1.0
     },
@@ -222,7 +222,7 @@ tpv_generator = dict(
 )
 
 tpv_aggregator = dict(
-    type='TPVAggregatorV3',
+    type='TPVAggregator',
     embed_dims=_dim_,
 )
 
@@ -337,7 +337,7 @@ model = dict(
     pts_bbox_head=OccHead,
 )
 """Training params."""
-learning_rate = 3e-4
+learning_rate = 2e-4
 training_steps = 25000
 
 optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)

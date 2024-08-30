@@ -1,4 +1,4 @@
-lidar_ckpt = 'pretrain/lidar_2373.ckpt'
+lidar_ckpt = 'pretrain/lidar_2412.ckpt'
 
 # data_root = '/public/datasets/SemanticKITTI/dataset'
 # ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
@@ -232,7 +232,7 @@ OccHead = dict(
     with_cp=True,
     occ_size=occ_size,
     loss_weight_cfg={
-        "loss_voxel_ce_weight": 1.0,
+        "loss_voxel_ce_weight": 3.0,
         "loss_voxel_sem_scal_weight": 1.0,
         "loss_voxel_geo_scal_weight": 1.0
     },
@@ -246,6 +246,7 @@ tpv_generator = dict(
     embed_dims=_dim_,
     split=[8, 8, 8],
     grid_size=[128, 128, 16],
+    pool_type='global',
     global_encoder_backbone=Swin,
     global_encoder_neck=GeneralizedLSSFPN,
 )
@@ -262,9 +263,9 @@ model = dict(
     # ratio_feats_numeric=10,
     # ratio_feats_relation=100,
     ratio_logit_kl=0,
-    ratio_feats_numeric=2,
+    ratio_feats_numeric=1,
     ratio_feats_relation=0,
-    ratio_aggregator_weights=10,
+    ratio_aggregator_weights=0,
     teacher=dict(
         type='LidarSegmentor',
         lidar_tokenizer=dict(
@@ -404,7 +405,7 @@ model = dict(
     pts_bbox_head=OccHead,
 )
 """Training params."""
-learning_rate = 3e-4
+learning_rate = 2e-4
 training_steps = 25000
 
 optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)
