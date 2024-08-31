@@ -1,4 +1,4 @@
-lidar_ckpt = 'pretrain/lidar_2412.ckpt'
+lidar_ckpt = 'pretrain/lidar_2asdf373.ckpt'
 
 # data_root = '/public/datasets/SemanticKITTI/dataset'
 # ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
@@ -101,7 +101,7 @@ train_pipeline = [
         is_train=True,
     ),
     dict(
-        type='LidarPointsPreProcess_SemanticKitti_V1',
+        type='LidarPointsPreProcess_SemanticKitti',
         data_config=data_config,
         point_cloud_range=point_cloud_range,
         occ_size=occ_size,
@@ -144,7 +144,7 @@ test_pipeline = [
         is_train=False,
     ),
     dict(
-        type='LidarPointsPreProcess_SemanticKitti_V1',
+        type='LidarPointsPreProcess_SemanticKitti',
         data_config=data_config,
         point_cloud_range=point_cloud_range,
         occ_size=occ_size,
@@ -188,6 +188,16 @@ _num_points_cross_ = 8
 _num_levels_ = 1
 _num_cams_ = 1
 voxel_out_channels = [_dim_]
+
+distill_cfg = dict(
+    teacher_ckpt=lidar_ckpt,
+    ratio_logit_kl=1,
+    distill_3d_feature=True,
+    distill_2d_feature=True,
+    ratio_feats_numeric=1,
+    ratio_feats_relation=1,
+    ratio_aggregator_weights=1,
+)
 
 Swin = dict(
     type='Swin',
@@ -244,9 +254,7 @@ OccHead = dict(
 tpv_generator = dict(
     type='TPVGenerator',
     embed_dims=_dim_,
-    split=[8, 8, 8],
-    grid_size=[128, 128, 16],
-    pool_type='global',
+    pooler='avg',
     global_encoder_backbone=Swin,
     global_encoder_neck=GeneralizedLSSFPN,
 )
@@ -258,14 +266,7 @@ tpv_aggregator = dict(
 
 model = dict(
     type='CameraSegmentor',
-    teacher_ckpt=lidar_ckpt,
-    # ratio_logit_kl=50,
-    # ratio_feats_numeric=10,
-    # ratio_feats_relation=100,
-    ratio_logit_kl=0,
-    ratio_feats_numeric=1,
-    ratio_feats_relation=0,
-    ratio_aggregator_weights=0,
+    distill_cfg=distill_cfg,
     teacher=dict(
         type='LidarSegmentor',
         lidar_tokenizer=dict(

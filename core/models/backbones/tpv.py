@@ -184,7 +184,6 @@ class TPVGenerator(BaseModule):
             tpv_list.append(view)
 
         feats_all = dict()
-        feats_all['feats3d'] = x
         feats_all['tpv_backbone'] = x_tpv
         feats_all['tpv_neck'] = neck_out
 
@@ -229,14 +228,14 @@ class TPVAggregator(BaseModule):
         embed_dims=128,
     ):
         super().__init__()
-        self.combine_coeff = nn.Conv3d(embed_dims, 4, kernel_size=1, bias=False)
+        self.combine_coeff = nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False)
 
     def forward(self, tpv_list, x3d):
         b, c, h, w, z = x3d.size()
         weights = torch.ones([b, 4, h, w, z], device=x3d.device)
         x3d_ = self.weighted_sum([*tpv_list, x3d], weights)
         weights = self.combine_coeff(x3d_)
-        out_feats = self.weighted_sum([*tpv_list, x3d], F.softmax(weights, dim=1))
+        out_feats = self.weighted_sum(tpv_list, F.softmax(weights, dim=1))
 
         return [out_feats], weights
 

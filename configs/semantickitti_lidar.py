@@ -101,7 +101,7 @@ train_pipeline = [
         is_train=True,
     ),
     dict(
-        type='LidarPointsPreProcess_SemanticKitti_V1',
+        type='LidarPointsPreProcess_SemanticKitti',
         data_config=data_config,
         point_cloud_range=point_cloud_range,
         occ_size=occ_size,
@@ -144,7 +144,7 @@ test_pipeline = [
         is_train=False,
     ),
     dict(
-        type='LidarPointsPreProcess_SemanticKitti_V1',
+        type='LidarPointsPreProcess_SemanticKitti',
         data_config=data_config,
         point_cloud_range=point_cloud_range,
         occ_size=occ_size,
@@ -236,9 +236,7 @@ OccHead = dict(type='OccHead',
 tpv_generator = dict(
     type='TPVGenerator',
     embed_dims=_dim_,
-    split=[8, 8, 8],
-    grid_size=[128, 128, 16],
-    pool_type='global',
+    pooler='avg',
     global_encoder_backbone=Swin,
     global_encoder_neck=GeneralizedLSSFPN,
 )

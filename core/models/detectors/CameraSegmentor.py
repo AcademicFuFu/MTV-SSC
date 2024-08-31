@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import os
 import pdb
 from debug.utils import print_detail as pd, mem, count_trainable_parameters as param
-from debug.utils import save_all_feats, save_mtv, save_weights
+from debug.utils import save_all_feats, save_tpv, save_weights
 
 
 @DETECTORS.register_module()
@@ -29,11 +29,7 @@ class CameraSegmentor(BaseModule):
         pts_bbox_head=None,
         init_cfg=None,
         teacher=None,
-        teacher_ckpt=None,
-        ratio_logit_kl=10.0,
-        ratio_feats_numeric=2,
-        ratio_feats_relation=10,
-        ratio_aggregator_weights=10,
+        distill_cfg=None,
         grid_size=[128, 128, 16],
         **kwargs,
     ):
@@ -62,17 +58,21 @@ class CameraSegmentor(BaseModule):
         self.init_weights()
 
         if teacher:
+            assert distill_cfg is not None
             self.teacher = builder.build_detector(teacher).eval()
-            if os.path.exists(teacher_ckpt):
-                ckpt = torch.load(teacher_ckpt)['state_dict']
+
+            if os.path.exists(distill_cfg['teacher_ckpt']):
+                ckpt = torch.load(distill_cfg['teacher_ckpt'])['state_dict']
                 adjusted_ckpt = {key.replace('model.', ''): value for key, value in ckpt.items()}
                 self.teacher.load_state_dict(adjusted_ckpt)
-                print(f"Load teacher model from {teacher_ckpt}")
+                print(f"Load teacher model from {distill_cfg['teacher_ckpt']}")
             self.freeze_model(self.teacher)
-            self.ratio_logit_kl = ratio_logit_kl
-            self.ratio_feats_numeric = ratio_feats_numeric
-            self.ratio_feats_relation = ratio_feats_relation
-            self.ratio_aggregator_weights = ratio_aggregator_weights
+            self.distill_3d_feature = distill_cfg['distill_3d_feature']
+            self.distill_2d_feature = distill_cfg['distill_2d_feature']
+            self.ratio_logit_kl = distill_cfg['ratio_logit_kl']
+            self.ratio_feats_numeric = distill_cfg['ratio_feats_numeric']
+            self.ratio_feats_relation = distill_cfg['ratio_feats_relation']
+            self.ratio_aggregator_weights = distill_cfg['ratio_aggregator_weights']
 
     def freeze_model(self, model):
         for param in model.parameters():
@@ -157,6 +157,8 @@ class CameraSegmentor(BaseModule):
 
         # tpv aggregator
         x_3d, aggregator_weights = self.tpv_aggregator(tpv_list, img_voxel_feats)
+
+        feats_all['feats3d_view_transformer'] = img_voxel_feats
         feats_all['feats3d_aggregator'] = x_3d[0]
 
         # cls head
@@ -182,7 +184,6 @@ class CameraSegmentor(BaseModule):
                     logits_teacher=output_teacher['output_voxels'],
                     logits_student=output['output_voxels'],
                     target=gt_occ,
-                    ratio=self.ratio_logit_kl,
                 )
                 losses_distill.update(losses_distill_logit)
 
@@ -191,12 +192,10 @@ class CameraSegmentor(BaseModule):
                     feats_teacher=feats_all_teacher,
                     feats_student=feats_all,
                     target=gt_occ_1_2,
-                    ratio_numeric=self.ratio_feats_numeric,
-                    ration_relation=self.ratio_feats_relation,
                 )
                 losses_distill.update(losses_distill_feature)
 
-            # save_mtv(tpv_list, tpv_list_teacher)
+            # save_tpv(tpv_list, tpv_list_teacher)
             # save_all_feats(feats_student, feats_teacher, masks)
             # save_weights(aggregator_weights, aggregator_weights_teacher)
 
@@ -229,10 +228,10 @@ class CameraSegmentor(BaseModule):
         # img encoder
         img_voxel_feats, query_proposal, depth = self.extract_img_feat(img_inputs, img_metas)
 
-        # mtv transformer
+        # tpv transformer
         tpv_lists, _ = self.tpv_generator(img_voxel_feats)
 
-        # mtv aggregator
+        # tpv aggregator
         x_3d, aggregator_weights = self.tpv_aggregator(tpv_lists, img_voxel_feats)
 
         # cls head
@@ -268,6 +267,7 @@ class CameraSegmentor(BaseModule):
 
         # mtv aggregator
         x_3d, aggregator_weights = self.teacher.tpv_aggregator(mtv_lists, lidar_voxel_feats)
+        feats_all['feats3d_view_transformer'] = lidar_voxel_feats
         feats_all['feats3d_aggregator'] = x_3d[0]
 
         # cls head
@@ -292,7 +292,7 @@ class CameraSegmentor(BaseModule):
 
         return cosine_similarity_flat
 
-    def distill_loss_logits(self, logits_teacher, logits_student, target, ratio):
+    def distill_loss_logits(self, logits_teacher, logits_student, target):
         b, c, h, w, z = logits_teacher.shape
         logits_student_softmax = F.log_softmax(logits_student, dim=1).permute(0, 2, 3, 4, 1).reshape(b, h * w * z, c)
         logits_teacher_softmax = F.softmax(logits_teacher, dim=1).permute(0, 2, 3, 4, 1).reshape(b, h * w * z, c)
@@ -306,10 +306,10 @@ class CameraSegmentor(BaseModule):
             logits_student_i = logits_student_softmax[i][mask]
             logits_teacher_i = logits_teacher_softmax[i][mask]
             loss += nn.KLDivLoss(reduction="mean")(logits_student_i.unsqueeze(0), logits_teacher_i.unsqueeze(0))
-        loss = loss / float(target.size(0)) * ratio
+        loss = loss / float(target.size(0)) * self.ratio_logit_kl
         return dict(loss_distill_logits=loss)
 
-    def distill_loss_feature(self, feats_teacher, feats_student, target, ratio_numeric, ration_relation):
+    def distill_loss_feature(self, feats_teacher, feats_student, target):
         feats_teacher_list = []
         feats_student_list = []
         mask_list = []
@@ -317,109 +317,70 @@ class CameraSegmentor(BaseModule):
         target = target.to(torch.float32)
         target[target == 255] = 0
 
-        # feats 3d
-        mask = (target != 0).unsqueeze(1).expand_as(feats_student['feats3d'])
-        feats_student_list.append(feats_student['feats3d'])
-        feats_teacher_list.append(feats_teacher['feats3d'])
-        mask_list.append(mask)
-
-        feats_student_list.append(feats_student['feats3d_aggregator'])
-        feats_teacher_list.append(feats_teacher['feats3d_aggregator'])
-        mask_list.append(mask)
-
         # feats 2d
-        target_xy_mean = target.mean(dim=3)
-        mask_xy = target_xy_mean != 0
-        size_xy = (self.grid_size[0], self.grid_size[1])
-        target_yz_mean = target.mean(dim=1)
-        mask_yz = target_yz_mean != 0
-        size_yz = (self.grid_size[1], self.grid_size[2])
-        target_zx_mean = target.mean(dim=2)
-        mask_zx = target_zx_mean != 0
-        size_zx = (self.grid_size[0], self.grid_size[2])
+        if self.distill_2d_feature:
+            # mask
+            target_xy_mean = target.mean(dim=3)
+            mask_xy = target_xy_mean != 0
+            size_xy = (self.grid_size[0], self.grid_size[1])
+            target_yz_mean = target.mean(dim=1)
+            mask_yz = target_yz_mean != 0
+            size_yz = (self.grid_size[1], self.grid_size[2])
+            target_zx_mean = target.mean(dim=2)
+            mask_zx = target_zx_mean != 0
+            size_zx = (self.grid_size[0], self.grid_size[2])
+            masks = [mask_xy, mask_yz, mask_zx]
+            sizes = [size_xy, size_yz, size_zx]
 
-        # mtv
-        feats_backbone_teacher = feats_teacher['tpv_backbone']
-        feats_backbone_student = feats_student['tpv_backbone']
-        feats_neck_teacher = feats_teacher['tpv_neck']
-        feats_neck_student = feats_student['tpv_neck']
+            # tpv
+            feats_backbone_teacher = feats_teacher['tpv_backbone']
+            feats_backbone_student = feats_student['tpv_backbone']
+            feats_neck_teacher = feats_teacher['tpv_neck']
+            feats_neck_student = feats_student['tpv_neck']
 
-        # xy plane
-        for i in range(1):
-            for j in range(len(feats_backbone_teacher[i])):
-                feat_student = feats_backbone_student[i][j]
-                feat_teacher = feats_backbone_teacher[i][j]
-                feat_student = F.interpolate(feat_student, size=size_xy, mode='bilinear', align_corners=False)
-                feat_teacher = F.interpolate(feat_teacher, size=size_xy, mode='bilinear', align_corners=False)
-                mask = mask_xy.unsqueeze(1).expand_as(feat_student)
+            for i in range(3):
+                mask = masks[i]
+                size = sizes[i]
 
-                feats_student_list.append(feat_student)
-                feats_teacher_list.append(feat_teacher)
-                mask_list.append(mask)
+                # tpv backbone
+                for j in range(len(feats_backbone_teacher[i])):
+                    feat_student = feats_backbone_student[i][j]
+                    feat_teacher = feats_backbone_teacher[i][j]
+                    feat_student = F.interpolate(feat_student, size=size, mode='bilinear', align_corners=False)
+                    feat_teacher = F.interpolate(feat_teacher, size=size, mode='bilinear', align_corners=False)
+                    mask_ = mask.unsqueeze(1).expand_as(feat_student)
 
-            for j in range(len(feats_neck_teacher[i])):
-                feat_student = feats_neck_student[i][j]
-                feat_teacher = feats_neck_teacher[i][j]
-                feat_student = F.interpolate(feat_student, size=size_xy, mode='bilinear', align_corners=False)
-                feat_teacher = F.interpolate(feat_teacher, size=size_xy, mode='bilinear', align_corners=False)
-                mask = mask_xy.unsqueeze(1).expand_as(feat_student)
+                    feats_student_list.append(feat_student)
+                    feats_teacher_list.append(feat_teacher)
+                    mask_list.append(mask_)
 
-                feats_student_list.append(feat_student)
-                feats_teacher_list.append(feat_teacher)
-                mask_list.append(mask)
+                # tpv neck
+                for j in range(len(feats_neck_teacher[i])):
+                    feat_student = feats_neck_student[i][j]
+                    feat_teacher = feats_neck_teacher[i][j]
+                    feat_student = F.interpolate(feat_student, size=size, mode='bilinear', align_corners=False)
+                    feat_teacher = F.interpolate(feat_teacher, size=size, mode='bilinear', align_corners=False)
+                    mask_ = mask.unsqueeze(1).expand_as(feat_student)
 
-        # yz plane
-        for i in range(1, 2):
-            for j in range(len(feats_backbone_teacher[i])):
-                feat_student = feats_backbone_student[i][j]
-                feat_teacher = feats_backbone_teacher[i][j]
-                feat_student = F.interpolate(feat_student, size=size_yz, mode='bilinear', align_corners=False)
-                feat_teacher = F.interpolate(feat_teacher, size=size_yz, mode='bilinear', align_corners=False)
-                mask = mask_yz.unsqueeze(1).expand_as(feat_student)
+                    feats_student_list.append(feat_student)
+                    feats_teacher_list.append(feat_teacher)
+                    mask_list.append(mask_)
 
-                feats_student_list.append(feat_student)
-                feats_teacher_list.append(feat_teacher)
-                mask_list.append(mask)
+        # feats 3d
+        if self.distill_3d_feature:
+            mask = (target != 0).unsqueeze(1).expand_as(feats_student['feats3d_view_transformer'])
+            feats_student_list.append(feats_student['feats3d_view_transformer'])
+            feats_teacher_list.append(feats_teacher['feats3d_view_transformer'])
+            mask_list.append(mask)
 
-            for j in range(len(feats_neck_teacher[i])):
-                feat_student = feats_neck_student[i][j]
-                feat_teacher = feats_neck_teacher[i][j]
-                feat_student = F.interpolate(feat_student, size=size_yz, mode='bilinear', align_corners=False)
-                feat_teacher = F.interpolate(feat_teacher, size=size_yz, mode='bilinear', align_corners=False)
-                mask = mask_yz.unsqueeze(1).expand_as(feat_student)
-
-                feats_student_list.append(feat_student)
-                feats_teacher_list.append(feat_teacher)
-                mask_list.append(mask)
-
-        # zx plane
-        for i in range(2, 3):
-            for j in range(len(feats_backbone_teacher[i])):
-                feat_student = feats_backbone_student[i][j]
-                feat_teacher = feats_backbone_teacher[i][j]
-                feat_student = F.interpolate(feat_student, size=size_zx, mode='bilinear', align_corners=False)
-                feat_teacher = F.interpolate(feat_teacher, size=size_zx, mode='bilinear', align_corners=False)
-                mask = mask_zx.unsqueeze(1).expand_as(feat_student)
-
-                feats_student_list.append(feat_student)
-                feats_teacher_list.append(feat_teacher)
-                mask_list.append(mask)
-
-            for j in range(len(feats_neck_teacher[i])):
-                feat_student = feats_neck_student[i][j]
-                feat_teacher = feats_neck_teacher[i][j]
-                feat_student = F.interpolate(feat_student, size=size_zx, mode='bilinear', align_corners=False)
-                feat_teacher = F.interpolate(feat_teacher, size=size_zx, mode='bilinear', align_corners=False)
-                mask = mask_zx.unsqueeze(1).expand_as(feat_student)
-
-                feats_student_list.append(feat_student)
-                feats_teacher_list.append(feat_teacher)
-                mask_list.append(mask)
+            feats_student_list.append(feats_student['feats3d_aggregator'])
+            feats_teacher_list.append(feats_teacher['feats3d_aggregator'])
+            mask_list.append(mask)
 
         losses_feature = {}
 
         # numeric loss
-        if ratio_numeric > 0:
+        if self.ratio_feats_numeric > 0:
             loss_numeric = 0
             for i in range(len(mask_list)):
                 mask = mask_list[i]
@@ -427,20 +388,21 @@ class CameraSegmentor(BaseModule):
                 feat_teacher = feats_teacher_list[i][mask]
                 loss = 3 * F.l1_loss(feat_student, feat_teacher) + F.mse_loss(feat_student, feat_teacher)
                 loss_numeric += loss
-            loss_numeric = loss_numeric / len(mask_list) * ratio_numeric
+            loss_numeric = loss_numeric / len(mask_list) * self.ratio_feats_numeric
             losses_feature.update(dict(loss_distill_feature_numeric=loss_numeric))
 
         # relation loss
-        if ration_relation > 0:
-            # skip 3d feature
-            for i in range(1, len(feats_student_list)):
+        if self.ratio_feats_relation > 0:
+            loss_relation = 0
+            # only xy plane
+            for i in range(0, 5):
                 feat_student = feats_student_list[i]
                 feat_teacher = feats_teacher_list[i]
                 cos_sim_student = self.calculate_cosine_similarity(feat_student, feat_student)
                 cos_sim_teacher = self.calculate_cosine_similarity(feat_teacher, feat_teacher)
-                loss_relation = F.l1_loss(cos_sim_student, cos_sim_teacher)
-                loss_relation += loss_relation
-            loss_relation = loss_relation / len(feats_student_list) * ration_relation
+                loss = F.l1_loss(cos_sim_student, cos_sim_teacher)
+                loss_relation += loss
+            loss_relation = loss_relation * self.ratio_feats_relation
             losses_feature.update(dict(loss_distill_feature_relation=loss_relation))
 
         return losses_feature, feats_student_list, feats_teacher_list, mask_list

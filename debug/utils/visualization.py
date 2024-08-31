@@ -150,21 +150,29 @@ def get_pca_feature_map(feature_map, n_components=3):
 
 def save_all_feats(feats_student, feats_teacher, masks):
     os.makedirs('save/distill/feats_all', exist_ok=True)
-    for i in range(1, len(feats_student)):
+    for i in range(len(feats_student)):
         feat_student = feats_student[i]
         feat_teacher = feats_teacher[i]
-        mask = masks[i]
+        if len(feat_student.shape) > 4:
+            continue
 
-        feat_student = feat_student * mask
-        feat_teacher = feat_teacher * mask
+        # mask = masks[i]
+        # feat_student = feat_student * mask
+        # feat_teacher = feat_teacher * mask
 
         b, c, h, w = feat_student.shape
+        mask = masks[i][0, 0, :, :].unsqueeze(-1).repeat(1, 1, 3).detach().cpu().numpy()
+        mask = np.flipud(mask)
+        mask = np.fliplr(mask)
         if h > w:
             feat_student = feat_student.permute(0, 1, 3, 2)
             feat_teacher = feat_teacher.permute(0, 1, 3, 2)
+            mask = mask.transpose(1, 0, 2)
 
         pca_student = get_pca_feature_map(feat_student.detach())
         pca_teacher = get_pca_feature_map(feat_teacher.detach())
+        pca_student = pca_student * mask
+        pca_teacher = pca_teacher * mask
 
         map = np.zeros((pca_student.shape[0], pca_student.shape[1] * 2, pca_student.shape[2]))
         map[:, :pca_student.shape[1], :] = pca_student
@@ -173,6 +181,35 @@ def save_all_feats(feats_student, feats_teacher, masks):
         plt.imsave(img_path, map)
         print(f'Saved: {img_path}')
     pdb.set_trace()
+
+
+def save_tpv(tpv_cam, tpv_lidar=None, num_views=[1, 1, 1]):
+    tpv_list = tpv_cam
+
+    # format to b,n,c,h,w
+    feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
+    save_feature_map_as_image(feat_xy.detach(), 'save/distill/tpv_cam', 'xy'.format(id), method='pca')
+
+    feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+    save_feature_map_as_image(feat_yz.detach(), 'save/distill/tpv_cam', 'yz'.format(id), method='pca')
+
+    feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+    save_feature_map_as_image(feat_zx.detach(), 'save/distill/tpv_cam', 'zx'.format(id), method='pca')
+
+    if tpv_lidar is not None:
+        tpv_list = tpv_lidar
+        feat_xy = tpv_list[0].squeeze(-1).unsqueeze(1).permute(0, 1, 2, 3, 4)
+        save_feature_map_as_image(feat_xy.detach(), 'save/distill/tpv_lidar', 'xy'.format(id), method='pca')
+
+        feat_yz = torch.flip(tpv_list[1].squeeze(-3).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+        save_feature_map_as_image(feat_yz.detach(), 'save/distill/tpv_lidar', 'yz'.format(id), method='pca')
+
+        feat_zx = torch.flip(tpv_list[2].squeeze(-2).unsqueeze(1).permute(0, 1, 2, 4, 3), dims=[-1])
+        save_feature_map_as_image(feat_zx.detach(), 'save/distill/tpv_lidar', 'zx'.format(id), method='pca')
+
+    # remind to comment while training
+    pdb.set_trace()
+    return
 
 
 def save_mtv(mtv_cam, mtv_lidar=None, num_views=[1, 1, 1]):
@@ -249,6 +286,7 @@ def save_logits_map(logits_cam, logits_lidar=None):
 
 def save_weights(weights_cam, weights_lidar=None):
     os.makedirs('save/distill/weights', exist_ok=True)
+    pdb.set_trace()
     weights_cam = F.softmax(weights_cam, dim=1)
     if weights_lidar is not None:
         weights_lidar = F.softmax(weights_lidar, dim=1)
