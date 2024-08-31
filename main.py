@@ -33,6 +33,7 @@ def parse_config():
 
 if __name__ == '__main__':
     args, config = parse_config()
+    print(config)
     log_folder = os.path.join('logs', config['log_folder'])
     misc.check_path(log_folder)
 
