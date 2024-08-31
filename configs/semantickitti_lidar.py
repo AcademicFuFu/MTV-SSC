@@ -225,9 +225,9 @@ OccHead = dict(type='OccHead',
                with_cp=True,
                occ_size=occ_size,
                loss_weight_cfg={
-                   "loss_voxel_ce_weight": 1,
-                   "loss_voxel_sem_scal_weight": 0.3,
-                   "loss_voxel_geo_scal_weight": 0.5,
+                   "loss_voxel_ce_weight": 3,
+                   "loss_voxel_sem_scal_weight": 1,
+                   "loss_voxel_geo_scal_weight": 1,
                },
                conv_cfg=dict(type='Conv3d', bias=False),
                norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
@@ -277,7 +277,7 @@ model = dict(
     pts_bbox_head=OccHead,
 )
 """Training params."""
-learning_rate = 3e-4
+learning_rate = 2e-4
 training_steps = 25000
 
 optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)
