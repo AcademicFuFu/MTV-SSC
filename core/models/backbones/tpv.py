@@ -111,23 +111,14 @@ class TPVWeightedAvgPooler(BaseModule):
         embed_dims=128,
         split=[8, 8, 8],
         grid_size=[128, 128, 16],
-        pool_type='global',
     ):
         super().__init__()
         self.weights_conv = nn.Sequential(nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False))
-        if pool_type == 'global':
-            self.pool_xy = GlobalWeightedAvgPool3D(dim='xy', split=split, grid_size=grid_size)
-            self.pool_yz = GlobalWeightedAvgPool3D(dim='yz', split=split, grid_size=grid_size)
-            self.pool_zx = GlobalWeightedAvgPool3D(dim='zx', split=split, grid_size=grid_size)
-            in_channels = [embed_dims for _ in split]
-            out_channels = [embed_dims for _ in split]
-
-        elif pool_type == 'local':
-            self.pool_xy = LocalWeightedAvgPool3D(dim='xy', split=split, grid_size=grid_size)
-            self.pool_yz = LocalWeightedAvgPool3D(dim='yz', split=split, grid_size=grid_size)
-            self.pool_zx = LocalWeightedAvgPool3D(dim='zx', split=split, grid_size=grid_size)
-            in_channels = [int(embed_dims * s) for s in split]
-            out_channels = [int(embed_dims) for s in split]
+        self.pool_xy = GlobalWeightedAvgPool3D(dim='xy', split=split, grid_size=grid_size)
+        self.pool_yz = GlobalWeightedAvgPool3D(dim='yz', split=split, grid_size=grid_size)
+        self.pool_zx = GlobalWeightedAvgPool3D(dim='zx', split=split, grid_size=grid_size)
+        in_channels = [embed_dims for _ in split]
+        out_channels = [embed_dims for _ in split]
 
         self.mlp_xy = nn.Sequential(nn.Conv2d(in_channels[2], out_channels[2], kernel_size=1, stride=1), nn.ReLU(),
                                     nn.Conv2d(out_channels[2], out_channels[2], kernel_size=1, stride=1))
@@ -158,7 +149,6 @@ class TPVGenerator(BaseModule):
         split=[8, 8, 8],
         grid_size=[128, 128, 16],
         pooler='avg',
-        pool_type='global',
         global_encoder_backbone=None,
         global_encoder_neck=None,
     ):
@@ -166,7 +156,7 @@ class TPVGenerator(BaseModule):
 
         # pooling
         if pooler == 'avg':
-            self.tpv_pooler = TPVWeightedAvgPooler(embed_dims=embed_dims, split=split, grid_size=grid_size, pool_type=pool_type)
+            self.tpv_pooler = TPVWeightedAvgPooler(embed_dims=embed_dims, split=split, grid_size=grid_size)
         elif pooler == 'max':
             self.tpv_pooler = TPVMaxPooler(embed_dims=embed_dims, split=split, grid_size=grid_size)
 
@@ -208,100 +198,27 @@ class TPVGenerator(BaseModule):
         return tpv_list, feats_all
 
 
-# @BACKBONES.register_module()
-# class TPVAggregator(BaseModule):
+@BACKBONES.register_module()
+class TPVAggregator_old(BaseModule):
 
-#     def __init__(self, embed_dims=128):
-#         super().__init__()
-#         # self.combine_coeff = nn.Sequential(nn.Conv3d(embed_dims, sum(num_views), kernel_size=1, bias=False))
-#         self.combine_coeff = nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False)
+    def __init__(
+        self,
+        embed_dims=128,
+    ):
+        super().__init__()
 
-#     def forward(self, tpv_list, x3d):
-#         weights = self.combine_coeff(x3d)
-#         out_feats = self.weighted_sum(tpv_list, F.softmax(weights, dim=1))
+    def forward(self, tpv_list, x3d):
+        b, c, h, w, z = x3d.size()
+        weights = torch.ones([b, 3, h, w, z], device=x3d.device)
+        out_feats = self.weighted_sum(tpv_list, weights)
 
-#         return [out_feats], weights
+        return [out_feats], weights
 
-#     def weighted_sum(self, global_feats, weights):
-#         out_feats = global_feats[0] * weights[:, 0:1, ...]
-#         for i in range(1, len(global_feats)):
-#             out_feats += global_feats[i] * weights[:, i:i + 1, ...]
-#         return out_feats
-
-# @BACKBONES.register_module()
-# class TPVAggregatorV1(BaseModule):
-
-#     def __init__(
-#         self,
-#         embed_dims=128,
-#     ):
-#         super().__init__()
-#         self.combine_coeff = nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False)
-
-#     def forward(self, tpv_list, x3d):
-#         b, c, h, w, z = x3d.size()
-#         weights = torch.ones([b, 4, h, w, z], device=x3d.device)
-#         x3d_ = self.weighted_sum([*tpv_list, x3d], weights)
-#         weights = self.combine_coeff(x3d_)
-#         out_feats = self.weighted_sum(tpv_list, F.softmax(weights, dim=1))
-
-#         return [out_feats], weights
-
-#     def weighted_sum(self, global_feats, weights):
-#         out_feats = global_feats[0] * weights[:, 0:1, ...]
-#         for i in range(1, len(global_feats)):
-#             out_feats += global_feats[i] * weights[:, i:i + 1, ...]
-#         return out_feats
-
-# @BACKBONES.register_module()
-# class TPVAggregatorV2(BaseModule):
-
-#     def __init__(
-#         self,
-#         embed_dims=128,
-#     ):
-#         super().__init__()
-#         self.combine_coeff = nn.Conv3d(embed_dims, 4, kernel_size=1, bias=False)
-
-#     def forward(self, tpv_list, x3d):
-#         b, c, h, w, z = x3d.size()
-#         weights = torch.ones([b, 4, h, w, z], device=x3d.device)
-#         x3d_ = self.weighted_sum([*tpv_list, x3d], weights)
-#         weights = self.combine_coeff(x3d_)
-#         out_feats = self.weighted_sum([*tpv_list, x3d], F.softmax(weights, dim=1))
-
-#         return [out_feats], weights
-
-#     def weighted_sum(self, global_feats, weights):
-#         out_feats = global_feats[0] * weights[:, 0:1, ...]
-#         for i in range(1, len(global_feats)):
-#             out_feats += global_feats[i] * weights[:, i:i + 1, ...]
-#         return out_feats
-
-# @BACKBONES.register_module()
-# class TPVAggregatorV3(BaseModule):
-
-#     def __init__(
-#         self,
-#         embed_dims=128,
-#     ):
-#         super().__init__()
-#         self.combine_coeff = nn.Conv3d(embed_dims, 3, kernel_size=1, bias=False)
-
-#     def forward(self, tpv_list, x3d):
-#         b, c, h, w, z = x3d.size()
-#         weights = torch.ones([b, 3, h, w, z], device=x3d.device)
-#         x3d_ = self.weighted_sum(tpv_list, weights)
-#         weights = self.combine_coeff(x3d_)
-#         out_feats = self.weighted_sum(tpv_list, F.softmax(weights, dim=1))
-
-#         return [out_feats], weights
-
-#     def weighted_sum(self, global_feats, weights):
-#         out_feats = global_feats[0] * weights[:, 0:1, ...]
-#         for i in range(1, len(global_feats)):
-#             out_feats += global_feats[i] * weights[:, i:i + 1, ...]
-#         return out_feats
+    def weighted_sum(self, global_feats, weights):
+        out_feats = global_feats[0] * weights[:, 0:1, ...]
+        for i in range(1, len(global_feats)):
+            out_feats += global_feats[i] * weights[:, i:i + 1, ...]
+        return out_feats
 
 
 @BACKBONES.register_module()

@@ -131,7 +131,7 @@ class CameraSegmentor(BaseModule):
                                 img_metas=img_metas,
                                 mlvl_dpt_dists=mlvl_dpt_dists)
 
-        if self.voxel_backbone is not None:
+        if hasattr(self, 'voxel_backbone'):
             x = self.voxel_backbone(x)
             x = self.voxel_neck(x)[0]
 
