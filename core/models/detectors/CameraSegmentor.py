@@ -369,12 +369,12 @@ class CameraSegmentor(BaseModule):
         # feats 3d
         if self.distill_3d_feature:
             mask = (target != 0).unsqueeze(1).expand_as(feats_student['feats3d_view_transformer'])
-            feats_student_list.append(feats_student['feats3d_view_transformer'])
-            feats_teacher_list.append(feats_teacher['feats3d_view_transformer'])
-            mask_list.append(mask)
-
             feats_student_list.append(feats_student['feats3d_aggregator'])
             feats_teacher_list.append(feats_teacher['feats3d_aggregator'])
+            mask_list.append(mask)
+
+            feats_student_list.append(feats_student['feats3d_view_transformer'])
+            feats_teacher_list.append(feats_teacher['feats3d_view_transformer'])
             mask_list.append(mask)
 
         losses_feature = {}
@@ -383,16 +383,23 @@ class CameraSegmentor(BaseModule):
         if self.ratio_feats_numeric > 0:
             loss_numeric = 0
             for i in range(len(mask_list)):
+                # neck[0] and feats_3d ratio = 1, others ratio = 0.5
+                if self.distill_2d_feature:
+                    ratio = 1 if (i % 5 == 3 or i > 14) else 0.5
+                else:
+                    ratio = 1
+
                 mask = mask_list[i]
                 feat_student = feats_student_list[i][mask]
                 feat_teacher = feats_teacher_list[i][mask]
                 loss = 3 * F.l1_loss(feat_student, feat_teacher) + F.mse_loss(feat_student, feat_teacher)
-                loss_numeric += loss
+                loss_numeric += loss * ratio
             loss_numeric = loss_numeric / len(mask_list) * self.ratio_feats_numeric
             losses_feature.update(dict(loss_distill_feature_numeric=loss_numeric))
 
         # relation loss
         if self.ratio_feats_relation > 0:
+            assert self.distill_2d_feature is True
             loss_relation = 0
             # only xy plane
             for i in range(0, 5):

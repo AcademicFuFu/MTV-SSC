@@ -1,4 +1,4 @@
-lidar_ckpt = 'pretrain/lidar_2asdf373.ckpt'
+lidar_ckpt = 'pretrain/lidar_2412.ckpt'
 
 # data_root = '/public/datasets/SemanticKITTI/dataset'
 # ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
@@ -191,12 +191,12 @@ voxel_out_channels = [_dim_]
 
 distill_cfg = dict(
     teacher_ckpt=lidar_ckpt,
-    ratio_logit_kl=1,
     distill_3d_feature=True,
     distill_2d_feature=True,
     ratio_feats_numeric=1,
-    ratio_feats_relation=1,
-    ratio_aggregator_weights=1,
+    ratio_feats_relation=0,
+    ratio_aggregator_weights=0,
+    ratio_logit_kl=0,
 )
 
 Swin = dict(

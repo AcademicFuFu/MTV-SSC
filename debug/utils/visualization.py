@@ -284,45 +284,118 @@ def save_logits_map(logits_cam, logits_lidar=None):
     return
 
 
+# def save_weights(weights_cam, weights_lidar=None):
+#     os.makedirs('save/distill/weights', exist_ok=True)
+#     pdb.set_trace()
+#     weights_cam = F.softmax(weights_cam, dim=1)
+#     if weights_lidar is not None:
+#         weights_lidar = F.softmax(weights_lidar, dim=1)
+
+#     weights_cam_xy = weights_cam.mean(dim=4).squeeze(0).permute(1, 2, 0)
+#     if weights_lidar is not None:
+#         weights_lidar_xy = weights_lidar.mean(dim=4).squeeze(0).permute(1, 2, 0)
+#         weights = torch.cat([weights_cam_xy, weights_lidar_xy], dim=1)
+#     else:
+#         weights = weights_cam_xy
+#     weights = np.fliplr(np.flipud(weights.detach().cpu().numpy()))
+#     img_path = 'save/distill/weights/weights_xy.png'
+#     plt.imsave(img_path, weights)
+#     print(f'Saved: {img_path}')
+
+#     weights_cam_yz = torch.flip(weights_cam.mean(dim=2).squeeze(0).permute(2, 1, 0), dims=[-1])
+#     if weights_lidar is not None:
+#         weights_lidar_yz = torch.flip(weights_lidar.mean(dim=2).squeeze(0).permute(2, 1, 0), dims=[-1])
+#         weights = torch.cat([weights_cam_yz, weights_lidar_yz], dim=1)
+#     else:
+#         weights = weights_cam_yz
+#     weights = np.fliplr(np.flipud(weights.detach().cpu().numpy()))
+#     img_path = 'save/distill/weights/weights_yz.png'
+#     plt.imsave(img_path, weights)
+#     print(f'Saved: {img_path}')
+
+#     weights_cam_zx = torch.flip(weights_cam.mean(dim=3).squeeze(0).permute(2, 1, 0), dims=[-1])
+#     if weights_lidar is not None:
+#         weights_lidar_zx = torch.flip(weights_lidar.mean(dim=3).squeeze(0).permute(2, 1, 0), dims=[-1])
+#         weights = torch.cat([weights_cam_zx, weights_lidar_zx], dim=1)
+#     else:
+#         weights = weights_cam_zx
+#     weights = np.fliplr(np.flipud(weights.detach().cpu().numpy()))
+#     img_path = 'save/distill/weights/weights_zx.png'
+#     plt.imsave(img_path, weights)
+#     print(f'Saved: {img_path}')
+
+#     pdb.set_trace()
+#     return
+
+
 def save_weights(weights_cam, weights_lidar=None):
     os.makedirs('save/distill/weights', exist_ok=True)
-    pdb.set_trace()
+
     weights_cam = F.softmax(weights_cam, dim=1)
     if weights_lidar is not None:
         weights_lidar = F.softmax(weights_lidar, dim=1)
 
+    def get_weights_23d(weights):
+        weights_23d = torch.cat(
+            [
+                weights[:, :, 3:],
+                weights[:, :, :3].sum(dim=2, keepdim=True),
+                torch.zeros_like(weights[:, :, 3:]),
+            ],
+            dim=2,
+        )
+        return weights_23d
+
+    def save_img(weights, img_path):
+        weights = np.fliplr(np.flipud(weights.detach().cpu().numpy()))
+        plt.imsave(img_path, weights)
+        print(f'Saved: {img_path}')
+
     weights_cam_xy = weights_cam.mean(dim=4).squeeze(0).permute(1, 2, 0)
+    weights_cam_xy_tpv = weights_cam_xy[:, :, :3]
+    weights_cam_xy_23d = get_weights_23d(weights_cam_xy)
     if weights_lidar is not None:
         weights_lidar_xy = weights_lidar.mean(dim=4).squeeze(0).permute(1, 2, 0)
-        weights = torch.cat([weights_cam_xy, weights_lidar_xy], dim=1)
+        weights_lidar_xy_tpv = weights_lidar_xy[:, :, :3]
+        weights_lidar_xy_23d = get_weights_23d(weights_lidar_xy)
+        weights_tpv = torch.cat([weights_cam_xy_tpv, weights_lidar_xy_tpv], dim=1)
+        weights_23d = torch.cat([weights_cam_xy_23d, weights_lidar_xy_23d], dim=1)
     else:
-        weights = weights_cam_xy
-    weights = np.fliplr(np.flipud(weights.detach().cpu().numpy()))
-    img_path = 'save/distill/weights/weights_xy.png'
-    plt.imsave(img_path, weights)
-    print(f'Saved: {img_path}')
+        weights_tpv = weights_cam_xy_tpv
+        weights_23d = weights_cam_xy_23d
+
+    save_img(weights_tpv, 'save/distill/weights/weights_xy_tpv.png')
+    save_img(weights_23d, 'save/distill/weights/weights_xy_23d.png')
 
     weights_cam_yz = torch.flip(weights_cam.mean(dim=2).squeeze(0).permute(2, 1, 0), dims=[-1])
+    weights_cam_yz_tpv = weights_cam_yz[:, :, :3]
+    weights_cam_yz_23d = get_weights_23d(weights_cam_yz)
     if weights_lidar is not None:
         weights_lidar_yz = torch.flip(weights_lidar.mean(dim=2).squeeze(0).permute(2, 1, 0), dims=[-1])
-        weights = torch.cat([weights_cam_yz, weights_lidar_yz], dim=1)
+        weights_lidar_yz_tpv = weights_lidar_yz[:, :, :3]
+        weights_lidar_yz_23d = get_weights_23d(weights_lidar_yz)
+        weights_tpv = torch.cat([weights_cam_yz_tpv, weights_lidar_yz_tpv], dim=1)
+        weights_23d = torch.cat([weights_cam_yz_23d, weights_lidar_yz_23d], dim=1)
     else:
-        weights = weights_cam_yz
-    weights = np.fliplr(np.flipud(weights.detach().cpu().numpy()))
-    img_path = 'save/distill/weights/weights_yz.png'
-    plt.imsave(img_path, weights)
-    print(f'Saved: {img_path}')
+        weights_tpv = weights_cam_yz_tpv
+        weights_23d = weights_cam_yz_23d
+    save_img(weights_tpv, 'save/distill/weights/weights_yz_tpv.png')
+    save_img(weights_23d, 'save/distill/weights/weights_yz_23d.png')
 
     weights_cam_zx = torch.flip(weights_cam.mean(dim=3).squeeze(0).permute(2, 1, 0), dims=[-1])
+    weights_cam_zx_tpv = weights_cam_zx[:, :, :3]
+    weights_cam_zx_23d = get_weights_23d(weights_cam_zx)
     if weights_lidar is not None:
         weights_lidar_zx = torch.flip(weights_lidar.mean(dim=3).squeeze(0).permute(2, 1, 0), dims=[-1])
-        weights = torch.cat([weights_cam_zx, weights_lidar_zx], dim=1)
+        weights_lidar_zx_tpv = weights_lidar_zx[:, :, :3]
+        weights_lidar_zx_23d = get_weights_23d(weights_lidar_zx)
+        weights_tpv = torch.cat([weights_cam_zx_tpv, weights_lidar_zx_tpv], dim=1)
+        weights_23d = torch.cat([weights_cam_zx_23d, weights_lidar_zx_23d], dim=1)
     else:
-        weights = weights_cam_zx
-    weights = np.fliplr(np.flipud(weights.detach().cpu().numpy()))
-    img_path = 'save/distill/weights/weights_zx.png'
-    plt.imsave(img_path, weights)
-    print(f'Saved: {img_path}')
+        weights_tpv = weights_cam_zx_tpv
+        weights_23d = weights_cam_zx_23d
+    save_img(weights_tpv, 'save/distill/weights/weights_zx_tpv.png')
+    save_img(weights_23d, 'save/distill/weights/weights_zx_23d.png')
 
     pdb.set_trace()
     return
