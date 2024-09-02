@@ -303,7 +303,7 @@ class CameraSegmentor(BaseModule):
         for i in range(target.shape[0]):
             valid = (target[i] != 255)
             nonezero = (target[i] != 0)
-            mask = valid * nonezero if self.distill_kl_empty else valid
+            mask = valid * nonezero if not self.distill_kl_empty else valid
             logits_student_i = logits_student_softmax[i][mask]
             logits_teacher_i = logits_teacher_softmax[i][mask]
             loss += nn.KLDivLoss(reduction="mean")(logits_student_i.unsqueeze(0), logits_teacher_i.unsqueeze(0))
