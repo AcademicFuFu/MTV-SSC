@@ -401,8 +401,10 @@ class CameraSegmentor(BaseModule):
         if self.ratio_feats_relation > 0:
             assert self.distill_2d_feature is True
             loss_relation = 0
-            # only xy plane
-            for i in range(0, 5):
+            # only neck[0]
+            for i in range(len(mask_list)):
+                if i % 5 != 3 or i > 14:
+                    continue
                 feat_student = feats_student_list[i]
                 feat_teacher = feats_teacher_list[i]
                 cos_sim_student = self.calculate_cosine_similarity(feat_student, feat_student)
