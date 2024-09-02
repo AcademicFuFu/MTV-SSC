@@ -179,6 +179,7 @@ class KITTI360DatasetLC(Dataset):
                 img_3_path = os.path.join(img_base_path, 'image_01', 'data_rect', img_id + '.png')
                 lidar_path = os.path.join(lidar_base_path, 'velodyne_points', 'data', img_id + '.bin')
                 voxel_path = os.path.join(voxel_base_path, img_id + '_1_1.npy')
+                voxel_1_2_path = os.path.join(voxel_base_path, img_id + '_1_2.npy')
 
                 stereo_depth_path = os.path.join(self.stereo_depth_root, "sequences", sequence, img_id + '.npy')
 
@@ -197,7 +198,7 @@ class KITTI360DatasetLC(Dataset):
                     "proj_matrix_2": proj_matrix_2,
                     "proj_matrix_3": proj_matrix_3,
                     "voxel_path": voxel_path,
-                    # "voxel_1_2_path": voxel_1_2_path,
+                    "voxel_1_2_path": voxel_1_2_path,
                     "stereo_depth_path": stereo_depth_path
                 })
 

@@ -1,12 +1,12 @@
 lidar_ckpt = 'pretrain/lidar_2412.ckpt'
 
-data_root = '/public/datasets/SemanticKITTI/dataset'
-ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
-stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+# data_root = '/public/datasets/SemanticKITTI/dataset'
+# ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
+# stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
 
-# data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
-# stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
-# ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
+data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
+stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
+ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
 camera_used = ['left']
 
 dataset_type = 'SemanticKITTIDatasetLC'
@@ -193,11 +193,10 @@ distill_cfg = dict(
     teacher_ckpt=lidar_ckpt,
     distill_3d_feature=True,
     distill_2d_feature=True,
-    distill_kl_empty=False,
-    ratio_feats_numeric=0,
+    ratio_feats_numeric=1,
     ratio_feats_relation=0,
     ratio_aggregator_weights=0,
-    ratio_logit_kl=50,
+    ratio_logit_kl=0,
 )
 
 Swin = dict(

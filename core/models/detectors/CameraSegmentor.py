@@ -69,6 +69,7 @@ class CameraSegmentor(BaseModule):
             self.freeze_model(self.teacher)
             self.distill_3d_feature = distill_cfg['distill_3d_feature']
             self.distill_2d_feature = distill_cfg['distill_2d_feature']
+            self.distill_kl_empty = distill_cfg['distill_kl_empty']
             self.ratio_logit_kl = distill_cfg['ratio_logit_kl']
             self.ratio_feats_numeric = distill_cfg['ratio_feats_numeric']
             self.ratio_feats_relation = distill_cfg['ratio_feats_relation']
@@ -302,7 +303,7 @@ class CameraSegmentor(BaseModule):
         for i in range(target.shape[0]):
             valid = (target[i] != 255)
             nonezero = (target[i] != 0)
-            mask = valid * nonezero
+            mask = valid * nonezero if self.distill_kl_empty else valid
             logits_student_i = logits_student_softmax[i][mask]
             logits_teacher_i = logits_teacher_softmax[i][mask]
             loss += nn.KLDivLoss(reduction="mean")(logits_student_i.unsqueeze(0), logits_teacher_i.unsqueeze(0))
