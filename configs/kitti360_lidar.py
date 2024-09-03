@@ -1,6 +1,10 @@
-data_root = '/public/datasets_neo/KITTI-360'
-ann_file = '/public/datasets_neo/KITTI-360/preprocess/labels'
-stereo_depth_root = '/public/datasets_neo/KITTI-360/msnet3d_depth'
+# data_root = '/public/datasets_neo/KITTI-360'
+# ann_file = '/public/datasets_neo/KITTI-360/preprocess/labels'
+# stereo_depth_root = '/public/datasets_neo/KITTI-360/msnet3d_depth'
+
+data_root = '/ailab/group/pjlab-adg1/ssd_dataset/Kitti360'
+ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/Kitti360/preprocess/labels'
+stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/Kitti360/msnet3d_depth_kitti360'
 camera_used = ['left']
 
 dataset_type = 'KITTI360DatasetLC'
