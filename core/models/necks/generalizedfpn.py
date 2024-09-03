@@ -5,20 +5,23 @@ from mmcv.cnn import ConvModule
 from mmengine.model import BaseModule
 from mmdet.models import NECKS
 
+
 @NECKS.register_module()
 class GeneralizedLSSFPN(BaseModule):
+
     def __init__(
-        self,
-        in_channels,
-        out_channels,
-        num_outs,
-        start_level=0,
-        end_level=-1,
-        no_norm_on_lateral=False,
-        conv_cfg=None,
-        norm_cfg=dict(type="BN2d"),
-        act_cfg=dict(type="ReLU"),
-        upsample_cfg=dict(mode="bilinear", align_corners=True),
+            self,
+            in_channels,
+            out_channels,
+            num_outs,
+            start_level=0,
+            end_level=-1,
+            no_norm_on_lateral=False,
+            conv_cfg=None,
+            norm_cfg=dict(type="BN2d"),
+            act_cfg=dict(type="ReLU"),
+            upsample_cfg=dict(mode="bilinear", align_corners=True),
+            order=("conv", "norm", "act"),
     ) -> None:
         super().__init__()
         assert isinstance(in_channels, list)
@@ -46,18 +49,14 @@ class GeneralizedLSSFPN(BaseModule):
 
         for i in range(self.start_level, self.backbone_end_level):
             l_conv = ConvModule(
-                in_channels[i]
-                + (
-                    in_channels[i + 1]
-                    if i == self.backbone_end_level - 1
-                    else out_channels
-                ),
+                in_channels[i] + (in_channels[i + 1] if i == self.backbone_end_level - 1 else out_channels),
                 out_channels,
                 1,
                 conv_cfg=conv_cfg,
                 norm_cfg=norm_cfg if not self.no_norm_on_lateral else None,
                 act_cfg=act_cfg,
                 inplace=False,
+                order=order,
             )
             fpn_conv = ConvModule(
                 out_channels,
@@ -68,6 +67,7 @@ class GeneralizedLSSFPN(BaseModule):
                 norm_cfg=norm_cfg,
                 act_cfg=act_cfg,
                 inplace=False,
+                order=order,
             )
 
             self.lateral_convs.append(l_conv)

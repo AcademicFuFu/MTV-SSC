@@ -68,7 +68,11 @@ class CameraSegmentor(BaseModule):
                 print(f"Load teacher model from {distill_cfg['teacher_ckpt']}")
             self.freeze_model(self.teacher)
             self.distill_3d_feature = distill_cfg['distill_3d_feature']
+            self.distill_aggregator = distill_cfg['distill_aggregator']
+            self.distill_view_transformer = distill_cfg['distill_view_transformer']
             self.distill_2d_feature = distill_cfg['distill_2d_feature']
+            self.distill_2d_backbone = distill_cfg['distill_2d_backbone']
+            self.distill_2d_neck = distill_cfg['distill_2d_neck']
             self.distill_kl_empty = distill_cfg['distill_kl_empty']
             self.ratio_logit_kl = distill_cfg['ratio_logit_kl']
             self.ratio_feats_numeric = distill_cfg['ratio_feats_numeric']
@@ -343,40 +347,48 @@ class CameraSegmentor(BaseModule):
                 mask = masks[i]
                 size = sizes[i]
 
+                pdb.set_trace()
                 # tpv backbone
-                for j in range(len(feats_backbone_teacher[i])):
-                    feat_student = feats_backbone_student[i][j]
-                    feat_teacher = feats_backbone_teacher[i][j]
-                    feat_student = F.interpolate(feat_student, size=size, mode='bilinear', align_corners=False)
-                    feat_teacher = F.interpolate(feat_teacher, size=size, mode='bilinear', align_corners=False)
-                    mask_ = mask.unsqueeze(1).expand_as(feat_student)
+                if self.distill_2d_backbone:
+                    for j in range(len(feats_backbone_teacher[i])):
+                        feat_student = feats_backbone_student[i][j]
+                        feat_teacher = feats_backbone_teacher[i][j]
+                        feat_student = F.interpolate(feat_student, size=size, mode='bilinear', align_corners=False)
+                        feat_teacher = F.interpolate(feat_teacher, size=size, mode='bilinear', align_corners=False)
+                        mask_ = mask.unsqueeze(1).expand_as(feat_student)
 
-                    feats_student_list.append(feat_student)
-                    feats_teacher_list.append(feat_teacher)
-                    mask_list.append(mask_)
+                        feats_student_list.append(feat_student)
+                        feats_teacher_list.append(feat_teacher)
+                        mask_list.append(mask_)
 
+                pdb.set_trace()
                 # tpv neck
-                for j in range(len(feats_neck_teacher[i])):
-                    feat_student = feats_neck_student[i][j]
-                    feat_teacher = feats_neck_teacher[i][j]
-                    feat_student = F.interpolate(feat_student, size=size, mode='bilinear', align_corners=False)
-                    feat_teacher = F.interpolate(feat_teacher, size=size, mode='bilinear', align_corners=False)
-                    mask_ = mask.unsqueeze(1).expand_as(feat_student)
+                if self.distill_2d_neck:
+                    for j in range(len(feats_neck_teacher[i])):
+                        feat_student = feats_neck_student[i][j]
+                        feat_teacher = feats_neck_teacher[i][j]
+                        feat_student = F.interpolate(feat_student, size=size, mode='bilinear', align_corners=False)
+                        feat_teacher = F.interpolate(feat_teacher, size=size, mode='bilinear', align_corners=False)
+                        mask_ = mask.unsqueeze(1).expand_as(feat_student)
 
-                    feats_student_list.append(feat_student)
-                    feats_teacher_list.append(feat_teacher)
-                    mask_list.append(mask_)
+                        feats_student_list.append(feat_student)
+                        feats_teacher_list.append(feat_teacher)
+                        mask_list.append(mask_)
 
         # feats 3d
         if self.distill_3d_feature:
-            mask = (target != 0).unsqueeze(1).expand_as(feats_student['feats3d_view_transformer'])
-            feats_student_list.append(feats_student['feats3d_aggregator'])
-            feats_teacher_list.append(feats_teacher['feats3d_aggregator'])
-            mask_list.append(mask)
-
-            feats_student_list.append(feats_student['feats3d_view_transformer'])
-            feats_teacher_list.append(feats_teacher['feats3d_view_transformer'])
-            mask_list.append(mask)
+            pdb.set_trace()
+            if self.distill_aggregator:
+                feats_teacher_list.append(feats_teacher['feats3d_aggregator'])
+                feats_student_list.append(feats_student['feats3d_aggregator'])
+                mask = (target != 0).unsqueeze(1).expand_as(feats_student['feats3d_aggregator'])
+                mask_list.append(mask)
+            pdb.set_trace()
+            if self.distill_view_transformer:
+                feats_teacher_list.append(feats_teacher['feats3d_view_transformer'])
+                feats_student_list.append(feats_student['feats3d_view_transformer'])
+                mask = (target != 0).unsqueeze(1).expand_as(feats_student['feats3d_view_transformer'])
+                mask_list.append(mask)
 
         losses_feature = {}
 
