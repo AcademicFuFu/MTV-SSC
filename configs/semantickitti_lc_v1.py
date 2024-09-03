@@ -426,7 +426,7 @@ optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)
 lr_scheduler = dict(type="OneCycleLR",
                     max_lr=learning_rate,
                     total_steps=training_steps + 10,
-                    pct_start=0.05,
+                    pct_start=0.1,
                     cycle_momentum=False,
                     anneal_strategy="cos",
                     interval="step",
