@@ -201,7 +201,7 @@ distill_cfg = dict(
     ratio_feats_numeric=1,
     ratio_feats_relation=0,
     ratio_aggregator_weights=0,
-    ratio_logit_kl=50,
+    ratio_logit_kl=0,
 )
 
 Swin = dict(
