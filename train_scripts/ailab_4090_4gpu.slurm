@@ -3,7 +3,7 @@
 #SBATCH -p adg_2             
 #SBATCH -N 1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=24
 #SBATCH --gres=gpu:4
 #SBATCH -t 4-00:00:00
 
