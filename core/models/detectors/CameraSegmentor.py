@@ -347,7 +347,6 @@ class CameraSegmentor(BaseModule):
                 mask = masks[i]
                 size = sizes[i]
 
-                pdb.set_trace()
                 # tpv backbone
                 if self.distill_2d_backbone:
                     for j in range(len(feats_backbone_teacher[i])):
@@ -361,7 +360,6 @@ class CameraSegmentor(BaseModule):
                         feats_teacher_list.append(feat_teacher)
                         mask_list.append(mask_)
 
-                pdb.set_trace()
                 # tpv neck
                 if self.distill_2d_neck:
                     for j in range(len(feats_neck_teacher[i])):
@@ -377,13 +375,11 @@ class CameraSegmentor(BaseModule):
 
         # feats 3d
         if self.distill_3d_feature:
-            pdb.set_trace()
             if self.distill_aggregator:
                 feats_teacher_list.append(feats_teacher['feats3d_aggregator'])
                 feats_student_list.append(feats_student['feats3d_aggregator'])
                 mask = (target != 0).unsqueeze(1).expand_as(feats_student['feats3d_aggregator'])
                 mask_list.append(mask)
-            pdb.set_trace()
             if self.distill_view_transformer:
                 feats_teacher_list.append(feats_teacher['feats3d_view_transformer'])
                 feats_student_list.append(feats_student['feats3d_view_transformer'])
