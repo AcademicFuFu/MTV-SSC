@@ -95,10 +95,10 @@ class LidarSegmentor(BaseModule):
         lidar_voxel_feats = self.extract_lidar_feat(points=points, grid_ind=grid_ind)
 
         # mtv transformer
-        mtv_lists, _ = self.tpv_generator(lidar_voxel_feats)
+        tpv_list, _ = self.tpv_generator(lidar_voxel_feats)
 
         # mtv aggregator
-        x_3d, aggregator_weights = self.tpv_aggregator(mtv_lists, lidar_voxel_feats)
+        x_3d, aggregator_weights = self.tpv_aggregator(tpv_list, lidar_voxel_feats)
 
         # cls head
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
@@ -106,5 +106,5 @@ class LidarSegmentor(BaseModule):
         pred = output['output_voxels']
         pred = torch.argmax(pred, dim=1)
 
-        test_output = {'pred': pred, 'gt_occ': gt_occ}
+        test_output = {'pred': pred, 'gt_occ': gt_occ, 'tpv_list': tpv_list}
         return test_output

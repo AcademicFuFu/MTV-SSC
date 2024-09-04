@@ -234,25 +234,18 @@ class CameraSegmentor(BaseModule):
         img_voxel_feats, query_proposal, depth = self.extract_img_feat(img_inputs, img_metas)
 
         # tpv transformer
-        tpv_lists, _ = self.tpv_generator(img_voxel_feats)
+        tpv_list, _ = self.tpv_generator(img_voxel_feats)
 
         # tpv aggregator
-        x_3d, aggregator_weights = self.tpv_aggregator(tpv_lists, img_voxel_feats)
+        x_3d, aggregator_weights = self.tpv_aggregator(tpv_list, img_voxel_feats)
 
         # cls head
         output = self.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
-        # if hasattr(self, 'teacher'):
-        #     with torch.no_grad():
-        #         tpv_lists_teacher, output_teacher = self.forward_teacher(data_dict)
-
-        #     self.save_tpv(tpv_lists, tpv_lists_teacher)
-        #     self.save_logits_map(output['output_voxels'], output_teacher['output_voxels'])
-
         pred = output['output_voxels']
         pred = torch.argmax(pred, dim=1)
 
-        test_output = {'pred': pred, 'gt_occ': gt_occ}
+        test_output = {'pred': pred, 'gt_occ': gt_occ, 'tpv_list': tpv_list}
         return test_output
 
     def forward_teacher(self, data_dict):
@@ -268,17 +261,17 @@ class CameraSegmentor(BaseModule):
         lidar_voxel_feats = self.teacher.extract_lidar_feat(points=points, grid_ind=grid_ind)
 
         # mtv transformer
-        mtv_lists, feats_all = self.teacher.tpv_generator(lidar_voxel_feats)
+        tpv_lists, feats_all = self.teacher.tpv_generator(lidar_voxel_feats)
 
         # mtv aggregator
-        x_3d, aggregator_weights = self.teacher.tpv_aggregator(mtv_lists, lidar_voxel_feats)
+        x_3d, aggregator_weights = self.teacher.tpv_aggregator(tpv_lists, lidar_voxel_feats)
         feats_all['feats3d_view_transformer'] = lidar_voxel_feats
         feats_all['feats3d_aggregator'] = x_3d[0]
 
         # cls head
         output = self.teacher.pts_bbox_head(voxel_feats=x_3d, img_metas=img_metas, img_feats=None, gt_occ=gt_occ)
 
-        return mtv_lists, output, aggregator_weights, feats_all
+        return tpv_lists, output, aggregator_weights, feats_all
 
     def calculate_cosine_similarity(self, x, y):
         assert x.shape == y.shape, "输入特征的形状必须相同"
@@ -318,6 +311,7 @@ class CameraSegmentor(BaseModule):
         feats_teacher_list = []
         feats_student_list = []
         mask_list = []
+        ratio_list = []
 
         target = target.to(torch.float32)
         target[target == 255] = 0
@@ -359,6 +353,7 @@ class CameraSegmentor(BaseModule):
                         feats_student_list.append(feat_student)
                         feats_teacher_list.append(feat_teacher)
                         mask_list.append(mask_)
+                        ratio_list.append(0.1)
 
                 # tpv neck
                 if self.distill_2d_neck:
@@ -373,6 +368,9 @@ class CameraSegmentor(BaseModule):
                         feats_teacher_list.append(feat_teacher)
                         mask_list.append(mask_)
 
+                        ratio = 1 if j == 0 else 0.5
+                        ratio_list.append(ratio)
+
         # feats 3d
         if self.distill_3d_feature:
             if self.distill_aggregator:
@@ -380,11 +378,13 @@ class CameraSegmentor(BaseModule):
                 feats_student_list.append(feats_student['feats3d_aggregator'])
                 mask = (target != 0).unsqueeze(1).expand_as(feats_student['feats3d_aggregator'])
                 mask_list.append(mask)
+                ratio_list.append(1.5)
             if self.distill_view_transformer:
                 feats_teacher_list.append(feats_teacher['feats3d_view_transformer'])
                 feats_student_list.append(feats_student['feats3d_view_transformer'])
                 mask = (target != 0).unsqueeze(1).expand_as(feats_student['feats3d_view_transformer'])
                 mask_list.append(mask)
+                ratio_list.append(0.5)
 
         losses_feature = {}
 
@@ -392,17 +392,13 @@ class CameraSegmentor(BaseModule):
         if self.ratio_feats_numeric > 0:
             loss_numeric = 0
             for i in range(len(mask_list)):
-                # neck[0] and feats_3d ratio = 1, others ratio = 0.5
-                if self.distill_2d_feature:
-                    ratio = 1 if (i % 5 == 3 or i > 14) else 0.5
-                else:
-                    ratio = 1
-
                 mask = mask_list[i]
+                ratio = ratio_list[i]
                 feat_student = feats_student_list[i][mask]
                 feat_teacher = feats_teacher_list[i][mask]
                 loss = 3 * F.l1_loss(feat_student, feat_teacher) + F.mse_loss(feat_student, feat_teacher)
-                loss_numeric += loss * ratio
+                loss = loss * ratio
+                loss_numeric += loss
             loss_numeric = loss_numeric / len(mask_list) * self.ratio_feats_numeric
             losses_feature.update(dict(loss_distill_feature_numeric=loss_numeric))
 
@@ -411,11 +407,9 @@ class CameraSegmentor(BaseModule):
             assert self.distill_2d_feature is True
             loss_relation = 0
             # only neck[0]
-            for i in range(len(mask_list)):
-                if i % 5 != 3 or i > 14:
-                    continue
-                feat_student = feats_student_list[i]
-                feat_teacher = feats_teacher_list[i]
+            for i in range(3):
+                feat_student = feats_neck_student[i][0]
+                feat_teacher = feats_neck_teacher[i][0]
                 cos_sim_student = self.calculate_cosine_similarity(feat_student, feat_student)
                 cos_sim_teacher = self.calculate_cosine_similarity(feat_teacher, feat_teacher)
                 loss = F.l1_loss(cos_sim_student, cos_sim_teacher)
