@@ -394,10 +394,17 @@ class CameraSegmentor(BaseModule):
             for i in range(len(mask_list)):
                 mask = mask_list[i]
                 ratio = ratio_list[i]
-                feat_student = feats_student_list[i][mask]
-                feat_teacher = feats_teacher_list[i][mask]
-                loss = 3 * F.l1_loss(feat_student, feat_teacher) + F.mse_loss(feat_student, feat_teacher)
-                loss = loss * ratio
+
+                # l1 + mse
+                # feat_student = feats_student_list[i][mask]
+                # feat_teacher = feats_teacher_list[i][mask]
+                # loss = 3 * F.l1_loss(feat_student, feat_teacher) + F.mse_loss(feat_student, feat_teacher)
+                # loss = loss * ratio
+
+                # cos sim
+                feat_student = feats_student_list[i][mask].view(-1, 128)
+                feat_teacher = feats_teacher_list[i][mask].view(-1, 128)
+                loss = (1 - F.cosine_similarity(feat_student, feat_teacher)).mean()
                 loss_numeric += loss
             loss_numeric = loss_numeric / len(mask_list) * self.ratio_feats_numeric
             losses_feature.update(dict(loss_distill_feature_numeric=loss_numeric))
