@@ -392,18 +392,29 @@ class CameraSegmentor(BaseModule):
         if self.ratio_feats_numeric > 0:
             loss_numeric = 0
             for i in range(len(mask_list)):
-                mask = mask_list[i]
-                ratio = ratio_list[i]
 
                 # l1 + mse
+                # mask = mask_list[i]
+                # ratio = ratio_list[i]
                 # feat_student = feats_student_list[i][mask]
                 # feat_teacher = feats_teacher_list[i][mask]
                 # loss = 3 * F.l1_loss(feat_student, feat_teacher) + F.mse_loss(feat_student, feat_teacher)
                 # loss = loss * ratio
 
                 # cos sim
-                feat_student = feats_student_list[i][mask].view(-1, 128)
-                feat_teacher = feats_teacher_list[i][mask].view(-1, 128)
+                if len(feats_student_list[i].shape) == 5:
+                    b, c, h, w, z = feats_student_list[i].shape
+                    mask = mask_list[i].permute(0, 2, 3, 4, 1)
+                    feat_student = feats_student_list[i].permute(0, 2, 3, 4, 1)
+                    feat_teacher = feats_teacher_list[i].permute(0, 2, 3, 4, 1)
+                else:
+                    b, c, h, w = feats_student_list[i].shape
+                    mask = mask_list[i].permute(0, 2, 3, 1)
+                    feat_student = feats_student_list[i].permute(0, 2, 3, 1)
+                    feat_teacher = feats_teacher_list[i].permute(0, 2, 3, 1)
+
+                feat_student = feat_student[mask].view(-1, c)
+                feat_teacher = feat_teacher[mask].view(-1, c)
                 loss = (1 - F.cosine_similarity(feat_student, feat_teacher)).mean()
                 loss_numeric += loss
             loss_numeric = loss_numeric / len(mask_list) * self.ratio_feats_numeric
