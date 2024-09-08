@@ -1,15 +1,15 @@
-lidar_ckpt = 'pretrain/lidar_2412.ckpt'
+lidar_ckpt = 'pretrain/kitti360_lidar.ckpt'
 
-# data_root = '/public/datasets/SemanticKITTI/dataset'
-# ann_file = '/public/datasets/SemanticKITTI/dataset/labels'
-# stereo_depth_root = '/public/datasets/SemanticKITTI/dataset/sequences_msnet3d_depth'
+# data_root = '/public/datasets_neo/KITTI-360'
+# ann_file = '/public/datasets_neo/KITTI-360/preprocess/labels'
+# stereo_depth_root = '/public/datasets_neo/KITTI-360/msnet3d_depth'
 
-data_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/dataset'
-stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/sequences_msnet3d_depth'
-ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/SemanticKitti/labels'
+data_root = '/ailab/group/pjlab-adg1/ssd_dataset/Kitti360'
+ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/Kitti360/preprocess/labels'
+stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/Kitti360/msnet3d_depth_kitti360'
 camera_used = ['left']
 
-dataset_type = 'SemanticKITTIDatasetLC'
+dataset_type = 'KITTI360DatasetLC'
 point_cloud_range = [0, -25.6, -2, 51.2, 25.6, 4.4]
 occ_size = [256, 256, 32]
 lss_downsample = [2, 2, 2]
@@ -29,51 +29,31 @@ grid_config = {
 
 empty_idx = 0
 
-semantic_kitti_class_frequencies = [
-    5.41773033e09,
-    1.57835390e07,
-    1.25136000e05,
-    1.18809000e05,
-    6.46799000e05,
-    8.21951000e05,
-    2.62978000e05,
-    2.83696000e05,
-    2.04750000e05,
-    6.16887030e07,
-    4.50296100e06,
-    4.48836500e07,
-    2.26992300e06,
-    5.68402180e07,
-    1.57196520e07,
-    1.58442623e08,
-    2.06162300e06,
-    3.69705220e07,
-    1.15198800e06,
-    3.34146000e05,
+kitti360_class_frequencies = [
+    2264087502,
+    20098728,
+    104972,
+    96297,
+    1149426,
+    4051087,
+    125103,
+    105540713,
+    16292249,
+    45297267,
+    14454132,
+    110397082,
+    6766219,
+    295883213,
+    50037503,
+    1561069,
+    406330,
+    30516166,
+    1950115,
 ]
 
-# 20 classes with unlabeled
 class_names = [
-    'unlabeled',
-    'car',
-    'bicycle',
-    'motorcycle',
-    'truck',
-    'other-vehicle',
-    'person',
-    'bicyclist',
-    'motorcyclist',
-    'road',
-    'parking',
-    'sidewalk',
-    'other-ground',
-    'building',
-    'fence',
-    'vegetation',
-    'trunk',
-    'terrain',
-    'pole',
-    'traffic-sign',
+    'unlabeled', 'car', 'bicycle', 'motorcycle', 'truck', 'other-vehicle', 'person', 'road', 'parking', 'sidewalk',
+    'other-ground', 'building', 'fence', 'vegetation', 'terrain', 'pole', 'traffic-sign', 'other-structure', 'other-object'
 ]
 num_class = len(class_names)
 
@@ -81,7 +61,10 @@ num_class = len(class_names)
 bda_aug_conf = dict(rot_lim=(-22.5, 22.5), scale_lim=(0.95, 1.05), flip_dx_ratio=0.5, flip_dy_ratio=0.5, flip_dz_ratio=0)
 
 data_config = {
-    'input_size': (384, 1280),
+    'input_size': (384, 1408),
+    # 'resize': (-0.06, 0.11),
+    # 'rot': (-5.4, 5.4),
+    # 'flip': True,
     'resize': (0., 0.),
     'rot': (0.0, 0.0),
     'flip': False,
@@ -90,26 +73,26 @@ data_config = {
 }
 
 train_pipeline = [
-    dict(type='LoadMultiViewImageFromFiles_SemanticKitti',
+    dict(type='LoadMultiViewImageFromFiles_KITTI360',
          data_config=data_config,
          load_stereo_depth=True,
          is_train=True,
          color_jitter=(0.4, 0.4, 0.4)),
     dict(
-        type='LoadLidarPointsFromFiles_SemanticKitti',
+        type='LoadLidarPointsFromFiles_KITTI360',
         data_config=data_config,
         is_train=True,
     ),
     dict(
-        type='LidarPointsPreProcess_SemanticKitti',
+        type='LidarPointsPreProcess_KITTI360',
         data_config=data_config,
         point_cloud_range=point_cloud_range,
         occ_size=occ_size,
         coarse_ratio=coarse_ratio,
         is_train=True,
     ),
-    dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti'),
-    dict(type='LoadSemKittiAnnotation',
+    dict(type='CreateDepthFromLiDAR_KITTI360', data_root=data_root, dataset='kitti360'),
+    dict(type='LoadKITTI360Annotation',
          bda_aug_conf=bda_aug_conf,
          apply_bda=False,
          is_train=True,
@@ -133,26 +116,26 @@ trainset_config = dict(
 )
 
 test_pipeline = [
-    dict(type='LoadMultiViewImageFromFiles_SemanticKitti',
+    dict(type='LoadMultiViewImageFromFiles_KITTI360',
          data_config=data_config,
          load_stereo_depth=True,
          is_train=False,
          color_jitter=None),
     dict(
-        type='LoadLidarPointsFromFiles_SemanticKitti',
+        type='LoadLidarPointsFromFiles_KITTI360',
         data_config=data_config,
         is_train=False,
     ),
     dict(
-        type='LidarPointsPreProcess_SemanticKitti',
+        type='LidarPointsPreProcess_KITTI360',
         data_config=data_config,
         point_cloud_range=point_cloud_range,
         occ_size=occ_size,
         coarse_ratio=coarse_ratio,
         is_train=False,
     ),
-    dict(type='CreateDepthFromLiDAR', data_root=data_root, dataset='kitti'),
-    dict(type='LoadSemKittiAnnotation',
+    dict(type='CreateDepthFromLiDAR_KITTI360', data_root=data_root, dataset='kitti360'),
+    dict(type='LoadKITTI360Annotation',
          bda_aug_conf=bda_aug_conf,
          apply_bda=False,
          is_train=False,
@@ -248,7 +231,7 @@ OccHead = dict(
     },
     conv_cfg=dict(type='Conv3d', bias=False),
     norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
-    class_frequencies=semantic_kitti_class_frequencies,
+    class_frequencies=kitti360_class_frequencies,
 )
 
 tpv_generator = dict(
