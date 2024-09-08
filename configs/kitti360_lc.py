@@ -175,11 +175,16 @@ voxel_out_channels = [_dim_]
 distill_cfg = dict(
     teacher_ckpt=lidar_ckpt,
     distill_3d_feature=True,
+    distill_view_transformer=True,
+    distill_aggregator=True,
     distill_2d_feature=True,
-    ratio_feats_numeric=1,
-    ratio_feats_relation=0,
-    ratio_aggregator_weights=0,
-    ratio_logit_kl=0,
+    distill_2d_backbone=True,
+    distill_2d_neck=True,
+    distill_kl_empty=False,
+    ratio_feats_numeric=4,
+    ratio_feats_relation=5,
+    ratio_aggregator_weights=10,
+    ratio_logit_kl=70,
 )
 
 Swin = dict(
@@ -397,7 +402,7 @@ optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)
 lr_scheduler = dict(type="OneCycleLR",
                     max_lr=learning_rate,
                     total_steps=training_steps + 10,
-                    pct_start=0.05,
+                    pct_start=0.1,
                     cycle_momentum=False,
                     anneal_strategy="cos",
                     interval="step",
