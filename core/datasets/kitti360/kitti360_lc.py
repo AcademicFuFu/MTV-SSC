@@ -151,6 +151,7 @@ class KITTI360DatasetLC(Dataset):
         input_dict['stereo_depth_path'] = info['stereo_depth_path']
         # gt_occ is None for test-set
         input_dict['gt_occ'] = self.get_ann_info(index, key='voxel_path')
+        input_dict['gt_occ_1_2'] = self.get_ann_info(index, key='voxel_1_2_path')
 
         return input_dict
 
