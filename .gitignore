@@ -136,6 +136,7 @@ backups/
 slurm_tasks/
 pretrain/
 packages/
+final_model/
 logs
 pred
 weights

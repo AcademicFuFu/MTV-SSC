@@ -224,7 +224,6 @@ class CameraSegmentor(BaseModule):
     def forward_test(self, data_dict):
         img_inputs = data_dict['img_inputs']
         img_metas = data_dict['img_metas']
-        gt_occ = data_dict['gt_occ']
         if 'gt_occ' in data_dict:
             gt_occ = data_dict['gt_occ']
         else:

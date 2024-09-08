@@ -179,6 +179,7 @@ class SemanticKITTIDataset(Dataset):
                 # for sweep demo or test submission
                 if not os.path.exists(voxel_path):
                     voxel_path = None
+                    voxel_1_2_path = None
 
                 scans.append({
                     "img_2_path": img_2_path,

@@ -98,8 +98,8 @@ class pl_model(LightningBaseModel):
             with open(save_file, 'wb') as f:
                 output_voxels.tofile(f)
                 print('\n save to {}'.format(save_file))
-            save_folder = "{}/sequences/{}/tpv".format(self.save_path, sequence_id)
-            save_tpv(tpv_list, save_folder, frame_id)
+            # save_folder = "{}/sequences/{}/tpv".format(self.save_path, sequence_id)
+            # save_tpv(tpv_list, save_folder, frame_id)
 
         if gt_occ is not None:
             self.test_metrics.add_batch(pred, gt_occ)
