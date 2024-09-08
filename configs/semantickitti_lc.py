@@ -198,10 +198,10 @@ distill_cfg = dict(
     distill_2d_backbone=True,
     distill_2d_neck=True,
     distill_kl_empty=False,
-    ratio_feats_numeric=10,
-    ratio_feats_relation=0,
-    ratio_aggregator_weights=0,
-    ratio_logit_kl=0,
+    ratio_feats_numeric=4,
+    ratio_feats_relation=5,
+    ratio_aggregator_weights=10,
+    ratio_logit_kl=70,
 )
 
 Swin = dict(
