@@ -99,7 +99,7 @@ train_pipeline = [
          point_cloud_range=point_cloud_range),
     dict(type='CollectData',
          keys=['img_inputs', 'points', 'grid_ind', 'voxel_position_grid_coarse', 'gt_occ'],
-         meta_keys=['pc_range', 'occ_size', 'raw_img', 'stereo_depth', 'gt_occ_1_2']),
+         meta_keys=['pc_range', 'occ_size', 'sequence', 'frame_id', 'raw_img', 'stereo_depth', 'gt_occ_1_2']),
 ]
 
 trainset_config = dict(
@@ -407,7 +407,7 @@ model = dict(
 )
 """Training params."""
 learning_rate = 2e-4
-training_steps = 54000
+training_steps = 27000
 
 optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)
 

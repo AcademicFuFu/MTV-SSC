@@ -1,5 +1,3 @@
-lidar_ckpt = 'pretrain/kitti360_lidar.ckpt'
-
 # data_root = '/public/datasets_neo/KITTI-360'
 # ann_file = '/public/datasets_neo/KITTI-360/preprocess/labels'
 # stereo_depth_root = '/public/datasets_neo/KITTI-360/msnet3d_depth'
@@ -9,16 +7,15 @@ ann_file = '/ailab/group/pjlab-adg1/ssd_dataset/Kitti360/preprocess/labels'
 stereo_depth_root = '/ailab/group/pjlab-adg1/ssd_dataset/Kitti360/msnet3d_depth_kitti360'
 camera_used = ['left']
 
-dataset_type = 'KITTI360DatasetLC'
+dataset_type = 'KITTI360Dataset'
 point_cloud_range = [0, -25.6, -2, 51.2, 25.6, 4.4]
 occ_size = [256, 256, 32]
 lss_downsample = [2, 2, 2]
-grid_size = [128, 128, 16]
-coarse_ratio = 2
 
 voxel_x = (point_cloud_range[3] - point_cloud_range[0]) / occ_size[0]
 voxel_y = (point_cloud_range[4] - point_cloud_range[1]) / occ_size[1]
 voxel_z = (point_cloud_range[5] - point_cloud_range[2]) / occ_size[2]
+voxel_size = [voxel_x, voxel_y, voxel_z]
 
 grid_config = {
     'xbound': [point_cloud_range[0], point_cloud_range[3], voxel_x * lss_downsample[0]],
@@ -55,6 +52,7 @@ class_names = [
     'unlabeled', 'car', 'bicycle', 'motorcycle', 'truck', 'other-vehicle', 'person', 'road', 'parking', 'sidewalk',
     'other-ground', 'building', 'fence', 'vegetation', 'terrain', 'pole', 'traffic-sign', 'other-structure', 'other-object'
 ]
+
 num_class = len(class_names)
 
 # dataset config #
@@ -78,19 +76,6 @@ train_pipeline = [
          load_stereo_depth=True,
          is_train=True,
          color_jitter=(0.4, 0.4, 0.4)),
-    dict(
-        type='LoadLidarPointsFromFiles_KITTI360',
-        data_config=data_config,
-        is_train=True,
-    ),
-    dict(
-        type='LidarPointsPreProcess_KITTI360',
-        data_config=data_config,
-        point_cloud_range=point_cloud_range,
-        occ_size=occ_size,
-        coarse_ratio=coarse_ratio,
-        is_train=True,
-    ),
     dict(type='CreateDepthFromLiDAR_KITTI360', data_root=data_root, dataset='kitti360'),
     dict(type='LoadKITTI360Annotation',
          bda_aug_conf=bda_aug_conf,
@@ -98,8 +83,8 @@ train_pipeline = [
          is_train=True,
          point_cloud_range=point_cloud_range),
     dict(type='CollectData',
-         keys=['img_inputs', 'points', 'grid_ind', 'voxel_position_grid_coarse', 'gt_occ'],
-         meta_keys=['pc_range', 'occ_size', 'raw_img', 'stereo_depth', 'gt_occ_1_2']),
+         keys=['img_inputs', 'gt_occ'],
+         meta_keys=['pc_range', 'occ_size', 'sequence', 'frame_id', 'raw_img', 'stereo_depth', 'gt_occ_1_2']),
 ]
 
 trainset_config = dict(
@@ -121,19 +106,6 @@ test_pipeline = [
          load_stereo_depth=True,
          is_train=False,
          color_jitter=None),
-    dict(
-        type='LoadLidarPointsFromFiles_KITTI360',
-        data_config=data_config,
-        is_train=False,
-    ),
-    dict(
-        type='LidarPointsPreProcess_KITTI360',
-        data_config=data_config,
-        point_cloud_range=point_cloud_range,
-        occ_size=occ_size,
-        coarse_ratio=coarse_ratio,
-        is_train=False,
-    ),
     dict(type='CreateDepthFromLiDAR_KITTI360', data_root=data_root, dataset='kitti360'),
     dict(type='LoadKITTI360Annotation',
          bda_aug_conf=bda_aug_conf,
@@ -141,8 +113,8 @@ test_pipeline = [
          is_train=False,
          point_cloud_range=point_cloud_range),
     dict(type='CollectData',
-         keys=['img_inputs', 'points', 'grid_ind', 'voxel_position_grid_coarse', 'gt_occ'],
-         meta_keys=['pc_range', 'occ_size', 'sequence', 'frame_id', 'raw_img', 'stereo_depth'])
+         keys=['img_inputs', 'gt_occ'],
+         meta_keys=['pc_range', 'occ_size', 'sequence', 'frame_id', 'raw_img', 'stereo_depth']),
 ]
 
 testset_config = dict(type=dataset_type,
@@ -181,21 +153,6 @@ _num_points_cross_ = 8
 _num_levels_ = 1
 _num_cams_ = 1
 voxel_out_channels = [_dim_]
-
-distill_cfg = dict(
-    teacher_ckpt=lidar_ckpt,
-    distill_3d_feature=True,
-    distill_view_transformer=True,
-    distill_aggregator=True,
-    distill_2d_feature=True,
-    distill_2d_backbone=True,
-    distill_2d_neck=True,
-    distill_kl_empty=False,
-    ratio_feats_numeric=4,
-    ratio_feats_relation=5,
-    ratio_aggregator_weights=10,
-    ratio_logit_kl=70,
-)
 
 Swin = dict(
     type='Swin',
@@ -264,37 +221,6 @@ tpv_aggregator = dict(
 
 model = dict(
     type='CameraSegmentor',
-    distill_cfg=distill_cfg,
-    teacher=dict(
-        type='LidarSegmentor',
-        lidar_tokenizer=dict(
-            type='LidarEncoder',
-            grid_size=grid_size,
-            in_channels=6,
-            out_channels=128,
-            fea_compre=None,
-            base_channels=128,
-            split=[8, 8, 8],
-            track_running_stats=False,
-        ),
-        lidar_backbone=dict(type='CustomResNet3D',
-                            numC_input=128,
-                            num_layer=[2, 2, 2],
-                            num_channels=[128, 128, 128],
-                            stride=[1, 2, 2]),
-        lidar_neck=dict(type='GeneralizedLSSFPN',
-                        in_channels=[128, 128, 128],
-                        out_channels=_dim_,
-                        start_level=0,
-                        num_outs=3,
-                        norm_cfg=norm_cfg,
-                        conv_cfg=dict(type='Conv3d'),
-                        act_cfg=dict(type='ReLU', inplace=True),
-                        upsample_cfg=dict(mode='trilinear', align_corners=False)),
-        tpv_generator=tpv_generator,
-        tpv_aggregator=tpv_aggregator,
-        pts_bbox_head=OccHead,
-    ),
     img_backbone=dict(
         type='CustomEfficientNet',
         arch='b7',
@@ -407,7 +333,7 @@ model = dict(
 )
 """Training params."""
 learning_rate = 2e-4
-training_steps = 54000
+training_steps = 27000
 
 optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)
 

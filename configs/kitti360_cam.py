@@ -163,7 +163,7 @@ Swin = dict(
     mlp_ratio=4,
     in_channels=128,
     patch_size=4,
-    strides=[1, 1, 2, 2],
+    strides=[1, 2, 2, 2],
     frozen_stages=-1,
     qkv_bias=True,
     qk_scale=None,
@@ -332,7 +332,7 @@ model = dict(
     pts_bbox_head=OccHead,
 )
 """Training params."""
-learning_rate = 3e-4
+learning_rate = 2e-4
 training_steps = 54000
 
 optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)

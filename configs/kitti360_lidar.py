@@ -155,7 +155,17 @@ testset_config = dict(type=dataset_type,
                       occ_size=occ_size,
                       pc_range=point_cloud_range)
 
-data = dict(train=trainset_config, val=testset_config, test=testset_config)
+valset_config = dict(type=dataset_type,
+                     stereo_depth_root=stereo_depth_root,
+                     data_root=data_root,
+                     ann_file=ann_file,
+                     pipeline=test_pipeline,
+                     split='val',
+                     camera_used=camera_used,
+                     occ_size=occ_size,
+                     pc_range=point_cloud_range)
+
+data = dict(train=trainset_config, val=valset_config, test=testset_config)
 
 train_dataloader_config = dict(batch_size=1, num_workers=4)
 
@@ -200,21 +210,23 @@ GeneralizedLSSFPN = dict(
     upsample_cfg=dict(mode='bilinear', align_corners=False),
 )
 
-OccHead = dict(type='OccHead',
-               in_channels=[sum(voxel_out_channels)],
-               out_channel=num_class,
-               empty_idx=0,
-               num_level=1,
-               with_cp=True,
-               occ_size=occ_size,
-               loss_weight_cfg={
-                   "loss_voxel_ce_weight": 3,
-                   "loss_voxel_sem_scal_weight": 1,
-                   "loss_voxel_geo_scal_weight": 1,
-               },
-               conv_cfg=dict(type='Conv3d', bias=False),
-               norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
-               class_frequencies=kitti360_class_frequencies)
+OccHead = dict(
+    type='OccHead',
+    in_channels=[sum(voxel_out_channels)],
+    out_channel=num_class,
+    empty_idx=0,
+    num_level=1,
+    with_cp=True,
+    occ_size=occ_size,
+    loss_weight_cfg={
+        "loss_voxel_ce_weight": 3.0,
+        "loss_voxel_sem_scal_weight": 1.0,
+        "loss_voxel_geo_scal_weight": 1.0
+    },
+    conv_cfg=dict(type='Conv3d', bias=False),
+    norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
+    class_frequencies=kitti360_class_frequencies,
+)
 
 tpv_generator = dict(
     type='TPVGenerator',
@@ -261,7 +273,7 @@ model = dict(
 )
 """Training params."""
 learning_rate = 3e-4
-training_steps = 50000
+training_steps = 54000
 
 optimizer = dict(type="AdamW", lr=learning_rate, weight_decay=0.01)
 
@@ -273,5 +285,3 @@ lr_scheduler = dict(type="OneCycleLR",
                     anneal_strategy="cos",
                     interval="step",
                     frequency=1)
-
-load_from = './pretrain/pretrain_geodepth.pth'

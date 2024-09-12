@@ -62,7 +62,7 @@ class CameraSegmentor(BaseModule):
             self.teacher = builder.build_detector(teacher).eval()
 
             if os.path.exists(distill_cfg['teacher_ckpt']):
-                ckpt = torch.load(distill_cfg['teacher_ckpt'])['state_dict']
+                ckpt = torch.load(distill_cfg['teacher_ckpt'], map_location='cpu')['state_dict']
                 adjusted_ckpt = {key.replace('model.', ''): value for key, value in ckpt.items()}
                 self.teacher.load_state_dict(adjusted_ckpt)
                 print(f"Load teacher model from {distill_cfg['teacher_ckpt']}")
